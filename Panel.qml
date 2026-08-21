@@ -53,7 +53,7 @@ Panel {
   //                  horizontal row from j/k's perspective. h/l moves
   //                  between presets, identical to bluetooth's header.
   //   "profiles" - monitor profile list; j/k walks each row.
-  //   "preview"    - applied-profile preview card; Enter opens monitors.lua.
+  //   "preview"    - applied-profile layout canvas; drag a monitor to reposition.
   // Mouse hover on a target updates root state via the components' `hovered`
   // signal so keyboard cursor and pointer share one highlight.
   readonly property var scalePresets: ["1", "1.25", "1.6", "2", "3", "4"]
@@ -177,9 +177,7 @@ Panel {
       if (p) applyProfile(p.name)
       return
     }
-    if (focusSection === "preview") {
-      openMonitorsFile()
-    }
+    // preview: the canvas is mouse-driven (drag to reposition); nothing to apply
     // brightness: no separate action; the slider value is the action.
   }
 
@@ -1059,6 +1057,17 @@ Panel {
                 root.focusSection = "preview"
                 root.selectedIndex = 0
               }
+            }
+
+            Button {
+              text: "✎ EDITAR MONITORS.LUA"
+              fontSize: Style.font.caption
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              horizontalPadding: Style.spacing.sm
+              verticalPadding: Style.spacing.controlPaddingY
+              bordered: true
+              width: parent.width
               onClicked: root.openMonitorsFile()
             }
           }
@@ -1101,7 +1110,6 @@ Panel {
     id: preview
     required property bool hasCursor
     signal hovered(bool isHovered)
-    signal clicked()
 
     readonly property bool mouseHover: previewHover.containsMouse
     readonly property var layoutMonitors: root.previewLayout()
@@ -1202,7 +1210,6 @@ Panel {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onContainsMouseChanged: preview.hovered(containsMouse)
-      onClicked: preview.clicked()
     }
   }
 

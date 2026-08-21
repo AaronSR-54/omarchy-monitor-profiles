@@ -16,7 +16,8 @@ Profiles are plain JSON files under `~/.config/omarchy/monitor-profiles/`. See t
 - **Per-monitor scale** — the scale slider (and the `SUPER+/` / `SUPER+ALT+/` keybinds) changes the scale of the focused monitor only, and persists it in every profile plus `monitors.lua`. Different monitors can have different scales.
 - **Automatic centering** — whenever a scale changes or a profile is applied, monitor positions are recomputed so the layout stays centered: enabled monitors remain horizontally adjacent (the leftmost keeps its `x`) and their vertical centers are aligned (the tallest keeps its `y`).
 - **Horizontal profile switcher** — every profile in `~/.config/omarchy/monitor-profiles/` as a pill. Click one to apply it.
-- **Graphical layout preview** — instead of a text list, the applied profile is drawn as an interactive canvas: each enabled monitor is a rectangle at its relative logical size and position. With several monitors active you can **drag them to reposition**; dropping saves the new position (no recentering) and reloads Hyprland. A `⟳ CENTRAR` button restores the centered layout. Clicking the card background still opens `monitors.lua` in the editor.
+- **Graphical layout preview** — instead of a text list, the applied profile is drawn as an interactive canvas: each enabled monitor is a rectangle at its relative logical size and position. With several monitors active you can **drag them to reposition**; dropping saves the new position (no recentering) and reloads Hyprland. A `⟳ CENTRAR` button restores the centered layout.
+- **Edit button** — an `✎ EDITAR MONITORS.LUA` button below the preview opens `monitors.lua` in the editor (no more implicit shortcut on the preview card).
 - **Keyboard navigation** — j/k move between sections, h/l walk the profiles, Enter applies the selected profile, Esc closes.
 
 ## Install
