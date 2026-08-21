@@ -1436,6 +1436,7 @@ Panel {
       // Background grid, drawn once (it is a fixed child of the layer).
       Canvas {
         id: gridLayer
+        z: 0
         anchors.fill: parent
         visible: canvas.draggable
 
@@ -1467,9 +1468,10 @@ Panel {
       }
 
       // Monitors live in their own host so rebuild() only touches them and
-      // never the grid or the layer itself.
+      // never the grid or the layer itself. Keep it above the grid.
       Item {
         id: monitorHost
+        z: 1
         anchors.fill: parent
 
         function rebuild() {
