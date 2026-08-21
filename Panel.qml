@@ -1271,6 +1271,7 @@ Panel {
     function resetDraft() {
       canvas.draft = canvas.cloneMonitors(canvas.monitors)
       canvas.pending = []
+      canvas.positionsChanged([])
     }
 
     // Repopulate the draft from the source monitors, but never clobber
