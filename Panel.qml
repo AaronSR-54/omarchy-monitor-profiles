@@ -258,6 +258,11 @@ Panel {
 
   function refresh() {
     if (!stateProc.running) stateProc.running = true
+  }
+
+  // Profiles and monitor descriptions only change when a profile is applied or
+  // saved, so load them at open/apply time rather than polling every few secs.
+  function refreshProfiles() {
     if (!profileProc.running) profileProc.running = true
     if (!descProc.running) descProc.running = true
   }
@@ -558,7 +563,10 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  Component.onCompleted: refresh()
+  Component.onCompleted: {
+    refresh()
+    refreshProfiles()
+  }
 
   // KeyboardPanel primes focus at open-time, so SUPER-bound IPC summons land
   // with j/k ready to navigate. Keep a default landing point, but don't paint
@@ -566,6 +574,7 @@ Panel {
   onOpenedChanged: {
     if (opened) {
       refresh()
+      refreshProfiles()
       if (brightnessAvailable) {
         focusSection = "brightness"
         selectedIndex = -1
@@ -644,7 +653,10 @@ Panel {
   Process {
     id: actionProc
     stdout: StdioCollector { waitForEnd: true }
-    onRunningChanged: if (!running) root.refresh()
+    onRunningChanged: if (!running) {
+      root.refresh()
+      root.refreshProfiles()
+    }
   }
 
   Process {
@@ -702,7 +714,10 @@ Panel {
       waitForEnd: true
       onStreamFinished: function() {
         root.applying = false
-        Qt.callLater(root.refresh)
+        Qt.callLater(function() {
+          root.refresh()
+          root.refreshProfiles()
+        })
       }
     }
   }
