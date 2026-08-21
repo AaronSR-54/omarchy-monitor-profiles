@@ -16,7 +16,10 @@ if [[ ! -f $profile_file ]]; then
 fi
 
 # Recompute positions so the layout stays centered for the current scales.
-"$script_dir/center-layout.sh" "$profile_file"
+# OMARCHY_SKIP_CENTER=1 preserves manual positions (used by set-position.sh).
+if [[ ${OMARCHY_SKIP_CENTER:-0} != 1 ]]; then
+  "$script_dir/center-layout.sh" "$profile_file"
+fi
 
 start_marker='-- >>> aaronsr.monitor managed <<<'
 end_marker='-- <<< aaronsr.monitor managed >>>'

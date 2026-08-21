@@ -16,7 +16,7 @@ Profiles are plain JSON files under `~/.config/omarchy/monitor-profiles/`. See t
 - **Per-monitor scale** — the scale slider (and the `SUPER+/` / `SUPER+ALT+/` keybinds) changes the scale of the focused monitor only, and persists it in every profile plus `monitors.lua`. Different monitors can have different scales.
 - **Automatic centering** — whenever a scale changes or a profile is applied, monitor positions are recomputed so the layout stays centered: enabled monitors remain horizontally adjacent (the leftmost keeps its `x`) and their vertical centers are aligned (the tallest keeps its `y`).
 - **Horizontal profile switcher** — every profile in `~/.config/omarchy/monitor-profiles/` as a pill. Click one to apply it.
-- **Applied-profile preview** — a card showing the active profile's monitors (resolution, position), disabled outputs dimmed. Click it to open `monitors.lua` in the editor.
+- **Graphical layout preview** — instead of a text list, the applied profile is drawn as an interactive canvas: each enabled monitor is a rectangle at its relative logical size and position. With several monitors active you can **drag them to reposition**; dropping saves the new position (no recentering) and reloads Hyprland. A `⟳ CENTRAR` button restores the centered layout. Clicking the card background still opens `monitors.lua` in the editor.
 - **Keyboard navigation** — j/k move between sections, h/l walk the profiles, Enter applies the selected profile, Esc closes.
 
 ## Install
@@ -66,9 +66,10 @@ o.bind("SUPER + SHIFT + P", "Monitor profiles", "omarchy-shell omarchy.monitor s
 
 The plugin ships four scripts (installed next to `Panel.qml`):
 
-- `apply-profile.sh <name>` — rewrite the managed block in `monitors.lua` from a profile and reload.
+- `apply-profile.sh <name>` — rewrite the managed block in `monitors.lua` from a profile and reload. Set `OMARCHY_SKIP_CENTER=1` to preserve manual positions.
 - `list-profiles.sh` — print all profiles as a JSON array (used by the panel).
 - `set-scale.sh <monitor> <scale|up|down>` — set one monitor's scale, keep every profile in sync, and re-apply the active profile. Called without a monitor, it targets the focused monitor.
+- `set-position.sh <monitor> <x> <y>` — set one monitor's position in the active profile and re-apply it without recentering (used by the drag-to-reposition canvas).
 - `center-layout.sh <profile.json>` — recompute a profile's positions so the layout stays centered.
 
 ## License

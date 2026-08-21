@@ -322,20 +322,76 @@ Panel {
     if (!previewProc.running) previewProc.running = true
   }
 
+  function parseMode(mode) {
+    var dims = String(mode || "").split("@")[0].split("x")
+    return {
+      width: parseInt(dims[0], 10) || 0,
+      height: parseInt(dims[1], 10) || 0
+    }
+  }
+
+  function parsePosition(pos) {
+    var p = String(pos || "").split("x")
+    return {
+      x: parseInt(p[0], 10) || 0,
+      y: parseInt(p[1], 10) || 0
+    }
+  }
+
   function parsePreview(raw) {
     try {
       var json = JSON.parse(String(raw || ""))
       root.previewOutputs = (json.monitors || []).map(function(m) {
+        var dims = root.parseMode(m.mode)
+        var pos = root.parsePosition(m.position)
         return {
           name: m.output || "",
           enabled: !!m.enabled,
           mode: m.mode || "",
-          position: m.position || ""
+          position: m.position || "",
+          scale: Number(m.scale) || 1,
+          width: dims.width,
+          height: dims.height,
+          x: pos.x,
+          y: pos.y
         }
       })
     } catch (e) {
       root.previewOutputs = []
     }
+  }
+
+  // Logical layout of the active profile's enabled monitors for the
+  // repositioning canvas: { name, x, y, w, h } in unscaled logical px.
+  function previewLayout() {
+    var out = []
+    var mons = root.previewOutputs || []
+    for (var i = 0; i < mons.length; i++) {
+      var m = mons[i]
+      if (!m || !m.enabled) continue
+      var s = Number(m.scale) || 1
+      out.push({
+        name: m.name,
+        x: m.x,
+        y: m.y,
+        w: (m.width || 0) / s,
+        h: (m.height || 0) / s
+      })
+    }
+    return out
+  }
+
+  function setMonitorPosition(output, x, y) {
+    if (!output) return
+    posProc.command = ["bash", root.pluginDir + "/set-position.sh", output, String(Math.round(x)), String(Math.round(y))]
+    if (!posProc.running) posProc.running = true
+  }
+
+  function recenterLayout() {
+    if (!root.activeProfile || root.applying) return
+    root.applying = true
+    applyProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile]
+    applyProc.running = true
   }
 
   function applyProfile(name) {
@@ -592,6 +648,15 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.parsePreview(text)
+    }
+  }
+
+  Process {
+    id: posProc
+    command: ["true"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.refresh()
     }
   }
 
@@ -1039,6 +1104,7 @@ Panel {
     signal clicked()
 
     readonly property bool mouseHover: previewHover.containsMouse
+    readonly property var layoutMonitors: root.previewLayout()
 
     implicitHeight: previewCard.implicitHeight
 
@@ -1060,11 +1126,11 @@ Panel {
         width: parent.width - parent.contentLeftInset - parent.contentRightInset
         x: parent.contentLeftInset
         y: parent.contentTopInset
-        spacing: Style.space(6)
+        spacing: Style.space(8)
 
         Item {
           width: parent.width
-          implicitHeight: Math.max(appliedLabel.implicitHeight, appliedName.implicitHeight)
+          implicitHeight: Math.max(appliedLabel.implicitHeight, appliedName.implicitHeight, centerButton.implicitHeight)
 
           Text {
             id: appliedLabel
@@ -1086,10 +1152,26 @@ Panel {
             font.pixelSize: Style.font.caption
             font.bold: true
             elide: Text.ElideRight
-            anchors.right: parent.right
+            anchors.right: centerButton.left
+            anchors.rightMargin: Style.space(8)
             anchors.left: appliedLabel.right
             anchors.leftMargin: Style.space(8)
             anchors.verticalCenter: parent.verticalCenter
+          }
+
+          Button {
+            id: centerButton
+            text: "⟳ CENTRAR"
+            fontSize: Style.font.caption
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            horizontalPadding: Style.spacing.sm
+            verticalPadding: Style.spacing.controlPaddingY
+            bordered: true
+            visible: preview.layoutMonitors.length > 1
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.recenterLayout()
           }
         }
 
@@ -1097,39 +1179,14 @@ Panel {
           foreground: root.bar.foreground
         }
 
-        Repeater {
-          model: root.previewOutputs
-
-          delegate: Row {
-            width: previewContent.width
-            spacing: Style.space(8)
-
-            Text {
-              text: modelData.name + (modelData.enabled ? "" : "  (off)")
-              color: root.bar.foreground
-              font.family: root.bar.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              font.bold: modelData.enabled
-              opacity: modelData.enabled ? 1.0 : 0.5
-              elide: Text.ElideRight
-              width: parent.width - previewSpec.implicitWidth - Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-            }
-
-            Text {
-              id: previewSpec
-              text: modelData.mode + (modelData.position ? "  ·  " + modelData.position : "")
-              color: Qt.darker(root.bar.foreground, 1.4)
-              font.family: root.bar.fontFamily
-              font.pixelSize: Style.font.caption
-              opacity: modelData.enabled ? 1.0 : 0.5
-              anchors.verticalCenter: parent.verticalCenter
-            }
-          }
+        LayoutView {
+          id: layoutView
+          width: parent.width
+          monitors: preview.layoutMonitors
         }
 
         Text {
-          visible: root.previewOutputs.length === 0
+          visible: preview.layoutMonitors.length === 0
           text: root.activeProfile ? "No monitors in profile" : "No profile applied"
           color: Qt.darker(root.bar.foreground, 1.4)
           font.family: root.bar.fontFamily
@@ -1146,6 +1203,107 @@ Panel {
       cursorShape: Qt.PointingHandCursor
       onContainsMouseChanged: preview.hovered(containsMouse)
       onClicked: preview.clicked()
+    }
+  }
+
+  // Interactive layout view: draws the active profile's enabled monitors at
+  // their relative logical positions; drag a monitor to reposition it.
+  component LayoutView: Item {
+    id: canvas
+    required property var monitors
+
+    implicitHeight: Style.space(150)
+    readonly property bool draggable: (monitors || []).length > 1
+    readonly property real pad: Style.space(10)
+    property real fitScale: 1
+    property real offsetX: 0
+    property real offsetY: 0
+
+    function computeFit() {
+      var mons = canvas.monitors || []
+      if (!mons.length || canvas.width <= 0) return
+      var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
+      for (var i = 0; i < mons.length; i++) {
+        var m = mons[i]
+        if (m.x < minX) minX = m.x
+        if (m.y < minY) minY = m.y
+        if (m.x + m.w > maxX) maxX = m.x + m.w
+        if (m.y + m.h > maxY) maxY = m.y + m.h
+      }
+      var bw = maxX - minX
+      var bh = maxY - minY
+      if (bw <= 0 || bh <= 0) return
+      var s = Math.min((canvas.width - canvas.pad * 2) / bw, (canvas.implicitHeight - canvas.pad * 2) / bh)
+      if (!isFinite(s) || s <= 0) return
+      canvas.fitScale = s
+      canvas.offsetX = canvas.pad - minX * s
+      canvas.offsetY = canvas.pad - minY * s
+    }
+
+    onMonitorsChanged: computeFit()
+    onWidthChanged: computeFit()
+
+    Rectangle {
+      id: desktop
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: Qt.darker(root.bar.foreground, 1.6)
+      opacity: 0.12
+    }
+
+    Repeater {
+      model: canvas.monitors
+
+      delegate: Rectangle {
+        required property var modelData
+
+        x: modelData.x * canvas.fitScale + canvas.offsetX
+        y: modelData.y * canvas.fitScale + canvas.offsetY
+        width: Math.max(24, modelData.w * canvas.fitScale)
+        height: Math.max(14, modelData.h * canvas.fitScale)
+        radius: Math.max(2, Style.space(2))
+        color: Style.selectedFillFor(root.bar.foreground, Color.accent)
+        border.width: 1
+        border.color: Qt.darker(root.bar.foreground, 1.4)
+
+        Text {
+          anchors.centerIn: parent
+          text: modelData.name
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          elide: Text.ElideMiddle
+          width: parent.width - Style.space(4)
+          horizontalAlignment: Text.AlignHCenter
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          enabled: canvas.draggable
+          hoverEnabled: canvas.draggable
+          cursorShape: canvas.draggable ? Qt.SizeAllCursor : Qt.ArrowCursor
+          drag.target: parent
+          drag.threshold: 2
+          onReleased: function() {
+            if (!canvas.draggable) return
+            var absX = Math.round((parent.x - canvas.offsetX) / canvas.fitScale)
+            var absY = Math.round((parent.y - canvas.offsetY) / canvas.fitScale)
+            if (absX === modelData.x && absY === modelData.y) return
+            root.setMonitorPosition(modelData.name, absX, absY)
+          }
+        }
+      }
+    }
+
+    Text {
+      visible: canvas.draggable
+      anchors.bottom: parent.bottom
+      anchors.horizontalCenter: parent.horizontalCenter
+      text: "Arrastra un monitor para reposicionarlo"
+      color: Qt.darker(root.bar.foreground, 1.4)
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.font.caption
     }
   }
 
