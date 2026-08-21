@@ -1428,7 +1428,7 @@ Panel {
       id: layer
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: Color.menu.background
+      color: Util.alpha(Style.selectedStateColor(root.bar.foreground, Color.accent), 0.05)
       border.width: 1
       border.color: Color.menu.border
       clip: true
