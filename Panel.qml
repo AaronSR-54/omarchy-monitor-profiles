@@ -1273,6 +1273,16 @@ Panel {
       return out
     }
 
+    // True when two monitor lists describe the same layout (name/x/y), so we
+    // can skip rebuilding the canvas on an identical refresh.
+    function sameLayout(a, b) {
+      if ((a || []).length !== (b || []).length) return false
+      for (var i = 0; i < (a || []).length; i++) {
+        if (!b[i] || a[i].name !== b[i].name || a[i].x !== b[i].x || a[i].y !== b[i].y) return false
+      }
+      return true
+    }
+
     function resetDraft() {
       canvas.draft = canvas.cloneMonitors(canvas.monitors)
       canvas.pending = []
@@ -1281,11 +1291,13 @@ Panel {
 
     // Repopulate the draft from the source monitors, but never clobber
     // unsaved drags: a periodic refresh re-reads the profile and would
-    // otherwise wipe the user's in-progress repositioning.
+    // otherwise wipe the user's in-progress repositioning. Also skip when the
+    // layout is unchanged so the canvas isn't rebuilt (no flicker).
     function reloadIfClean() {
-      if ((canvas.pending || []).length === 0) {
-        canvas.draft = canvas.cloneMonitors(canvas.monitors)
-      }
+      if ((canvas.pending || []).length !== 0) return
+      var next = canvas.cloneMonitors(canvas.monitors)
+      if (canvas.sameLayout(canvas.draft, next)) return
+      canvas.draft = next
     }
 
     // Snap the dragged monitor so it cannot overlap others and lands glued to
