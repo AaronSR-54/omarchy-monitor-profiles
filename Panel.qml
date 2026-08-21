@@ -1175,23 +1175,25 @@ Panel {
         }
       }
 
-      // Pending-change controls.
+      // Helper / pending-change controls. Shows the drag hint, or the
+      // unsaved-changes label + actions once the user starts repositioning.
       Row {
         id: controlsRow
         width: parent.width
         spacing: Style.space(8)
-        visible: preview.pending.length > 0
+        visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
 
         Text {
-          text: "Cambios sin guardar"
-          visible: preview.pending.length > 0
-          color: Color.accent
+          text: preview.pending.length > 0 ? "Cambios sin guardar" : "Arrastra un monitor para reposicionarlo"
+          color: preview.pending.length > 0 ? Color.accent : Qt.darker(root.bar.foreground, 1.4)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
           anchors.verticalCenter: parent.verticalCenter
           elide: Text.ElideRight
-          width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2) : 0
+          width: preview.pending.length > 0
+                 ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2)
+                 : parent.width
         }
 
         Button {
@@ -1451,7 +1453,7 @@ Panel {
         y: modelData ? modelData.y * layout.fitScale + layout.offsetY : 0
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
-        radius: Math.max(2, Style.space(2))
+        radius: Style.cornerRadius
         color: Style.selectedFillFor(root.bar.foreground, Color.accent)
         border.width: 1
         border.color: Color.menu.selectedBorder
@@ -1528,16 +1530,6 @@ Panel {
       }
     }
 
-    Text {
-      visible: canvas.draggable
-      anchors.bottom: parent.bottom
-      anchors.bottomMargin: Style.space(2)
-      anchors.horizontalCenter: parent.horizontalCenter
-      text: "Arrastra un monitor para reposicionarlo"
-      color: Qt.darker(root.bar.foreground, 1.4)
-      font.family: root.bar.fontFamily
-      font.pixelSize: Style.font.caption
-    }
   }
 
   component ProfilePill: Button {
