@@ -1309,9 +1309,9 @@ Panel {
       id: layer
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: Qt.rgba(0.12, 0.12, 0.15, 0.95)
+      color: Color.menu.background
       border.width: 1
-      border.color: Qt.darker(root.bar.foreground, 1.9)
+      border.color: Color.menu.border
       clip: true
 
       function rebuild() {
@@ -1342,9 +1342,9 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Math.max(2, Style.space(2))
-        color: Qt.rgba(0.26, 0.26, 0.31, 1.0)
+        color: Style.selectedFillFor(root.bar.foreground, Color.accent)
         border.width: 1
-        border.color: Qt.darker(root.bar.foreground, 1.5)
+        border.color: Color.menu.selectedBorder
 
         Text {
           anchors.centerIn: parent
