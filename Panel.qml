@@ -1503,7 +1503,7 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Style.cornerRadius
-        color: Style.selectedStateColor(root.bar.foreground, Color.accent)
+        color: Style.selectedFillFor(root.bar.foreground, Color.accent)
         border.width: 1
         border.color: Color.menu.selectedBorder
 
@@ -1527,7 +1527,7 @@ Panel {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.displayText
-            color: root.bar.foreground
+            color: Color.background
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
             font.bold: true
@@ -1540,9 +1540,10 @@ Panel {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.specText
             visible: parent.parent.width >= Style.space(46)
-            color: Qt.darker(root.bar.foreground, 1.4)
+            color: Color.background
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
+            opacity: 0.7
             elide: Text.ElideMiddle
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -1552,9 +1553,10 @@ Panel {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.positionText
             visible: parent.parent.width >= Style.space(46) && parent.parent.positionText !== ""
-            color: Qt.darker(root.bar.foreground, 1.5)
+            color: Color.background
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
+            opacity: 0.7
             elide: Text.ElideMiddle
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
