@@ -1,22 +1,22 @@
 # Display & profiles
 
-A bar widget for the Omarchy shell that adds a **hyprmoncfg monitor profile switcher** to the display panel.
+A bar widget for the Omarchy shell that adds a **native monitor profile switcher** to the display panel. Selecting a profile rewrites the managed block in `~/.config/hypr/monitors.lua`, enabling/disabling the chosen monitors, and reloads Hyprland. No hyprmoncfg.
 
 ## Requirements
 
-- **hyprmoncfg** (required) — this widget lists and applies your saved hyprmoncfg profiles. The profiles come from hyprmoncfg's own profile store (`~/.config/hyprmoncfg/profiles/`), so you need hyprmoncfg installed and at least one profile saved.
-  - Project: [github.com/crmne/hyprmoncfg](https://github.com/crmne/hyprmoncfg) · [hyprmoncfg.dev](https://hyprmoncfg.dev/)
-  - On Arch: `omarchy pkg aur add hyprmoncfg` (or install the `hyprmoncfg` AUR package)
 - The Omarchy shell with the built-in bar (Quickshell).
 - Hyprland (obviously).
+- `jq` (used by the helper scripts).
 
-> If hyprmoncfg is not installed, the profiles section stays empty; the panel still offers the standard display controls (brightness, text size, scale).
+Profiles are plain JSON files under `~/.config/omarchy/monitor-profiles/`. See the example profiles in `profiles/`.
 
 ## Features
 
 - **Brightness, text-size, and scale controls** — inherited from the `omarchy.monitor` panel.
-- **Horizontal profile switcher** — every saved hyprmoncfg profile as a pill. Click one to apply it (`hyprmoncfg apply <name>`).
-- **Applied-profile preview** — a card showing the active profile's monitors (resolution, position), disabled outputs dimmed. Click it to open the hyprmoncfg TUI.
+- **Per-monitor scale** — the scale slider (and the `SUPER+/` / `SUPER+ALT+/` keybinds) changes the scale of the focused monitor only, and persists it in every profile plus `monitors.lua`. Different monitors can have different scales.
+- **Automatic centering** — whenever a scale changes or a profile is applied, monitor positions are recomputed so the layout stays centered: enabled monitors remain horizontally adjacent (the leftmost keeps its `x`) and their vertical centers are aligned (the tallest keeps its `y`).
+- **Horizontal profile switcher** — every profile in `~/.config/omarchy/monitor-profiles/` as a pill. Click one to apply it.
+- **Applied-profile preview** — a card showing the active profile's monitors (resolution, position), disabled outputs dimmed. Click it to open `monitors.lua` in the editor.
 - **Keyboard navigation** — j/k move between sections, h/l walk the profiles, Enter applies the selected profile, Esc closes.
 
 ## Install
@@ -30,11 +30,28 @@ omarchy bar move aaronsr.monitor --section right
 
 ## Usage
 
-Left-click the display icon in the bar to open the panel, then click a profile to switch. Profiles are applied with no revert window by default; to enable hyprmoncfg's confirmation/revert, set `confirmTimeout` (seconds) on the widget's layout entry in `~/.config/omarchy/shell.json`:
+### Profiles
+
+Create JSON profiles in `~/.config/omarchy/monitor-profiles/`. Each file:
 
 ```json
-{ "id": "aaronsr.monitor", "confirmTimeout": 10 }
+{
+  "name": "All",
+  "monitors": [
+    { "output": "DP-1", "enabled": true, "mode": "2560x1440@120", "position": "1979x-100", "scale": 1 },
+    { "output": "DP-2", "enabled": true, "mode": "1920x1080@60", "position": "59x80", "scale": 1 }
+  ]
+}
 ```
+
+- `output` — the Hyprland monitor name (`hyprctl monitors`).
+- `enabled` — whether the monitor is active in this profile.
+- `mode`, `position`, `scale` — monitor settings. `position` is a hint: it is recomputed automatically so the layout stays centered.
+- `scale` is per monitor and is kept in sync across all profiles when you change it from the panel.
+
+### Selecting a profile
+
+Left-click the display icon in the bar to open the panel, then click a profile. Applying a profile rewrites the managed `-- >>> aaronsr.monitor managed <<<` block in `~/.config/hypr/monitors.lua` and reloads Hyprland.
 
 ### Optional keybinding
 
@@ -45,6 +62,15 @@ You can summon the selector from the keyboard — the panel opens focused on the
 o.bind("SUPER + SHIFT + P", "Monitor profiles", "omarchy-shell omarchy.monitor step")
 ```
 
+### Helpers
+
+The plugin ships four scripts (installed next to `Panel.qml`):
+
+- `apply-profile.sh <name>` — rewrite the managed block in `monitors.lua` from a profile and reload.
+- `list-profiles.sh` — print all profiles as a JSON array (used by the panel).
+- `set-scale.sh <monitor> <scale|up|down>` — set one monitor's scale, keep every profile in sync, and re-apply the active profile. Called without a monitor, it targets the focused monitor.
+- `center-layout.sh <profile.json>` — recompute a profile's positions so the layout stays centered.
+
 ## License
 
-MIT. Derived from the `omarchy.monitor` panel (MIT, © Omarchy) and integrates with [hyprmoncfg](https://github.com/crmne/hyprmoncfg) (MIT).
+MIT. Derived from the `omarchy.monitor` panel (MIT, © Omarchy).

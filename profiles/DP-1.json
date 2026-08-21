@@ -1,0 +1,19 @@
+{
+  "name": "DP-1",
+  "monitors": [
+    {
+      "output": "DP-1",
+      "enabled": true,
+      "mode": "2560x1440@120",
+      "position": "1979x-100",
+      "scale": 1
+    },
+    {
+      "output": "DP-2",
+      "enabled": false,
+      "mode": "1920x1080@60",
+      "position": "59x0",
+      "scale": 1
+    }
+  ]
+}

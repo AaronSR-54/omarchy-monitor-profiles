@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "aaronsr.monitor",
   "name": "Display & profiles",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Aaron Sanz Roca",
-  "description": "Display controls (brightness, scale, text size) plus a hyprmoncfg monitor profile switcher. Requires hyprmoncfg — the profiles come from ~/.config/hyprmoncfg/profiles/.",
+  "description": "Display controls (brightness, scale, text size) plus a native monitor profile switcher. Selecting a profile rewrites ~/.config/hypr/monitors.lua, enabling/disabling the chosen monitors. Profiles live in ~/.config/omarchy/monitor-profiles/.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,19 +13,13 @@
   },
   "barWidget": {
     "displayName": "Display & profiles",
-    "description": "Display controls plus a hyprmoncfg monitor profile switcher. Requires hyprmoncfg.",
+    "description": "Display controls plus a native monitor profile switcher that edits monitors.lua.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right",
-    "defaults": {
-      "confirmTimeout": 0
-    },
-    "schema": [
-      {
-        "key": "confirmTimeout",
-        "type": "number",
-        "label": "Apply confirmation timeout (seconds, 0 disables revert)"
-      }
-    ]
+    "defaults": {}
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.monitor"
   }
 }

@@ -27,12 +27,20 @@ Panel {
   property var displays: []
   property int enabledDisplayCount: 0
 
-  // hyprmoncfg monitor profiles (integrated profile switcher).
+  // Native monitor profiles: selecting one rewrites the managed block in
+  // ~/.config/hypr/monitors.lua (enabling/disabling the chosen monitors) and
+  // reloads Hyprland. Profiles live in ~/.config/omarchy/monitor-profiles/.
   property var profiles: []
   property string activeProfile: ""
   property var previewOutputs: []
   property bool applying: false
-  readonly property int confirmTimeout: root.setting("confirmTimeout", 0)
+
+  function configHome() {
+    var c = Quickshell.env("XDG_CONFIG_HOME")
+    return (c && c !== "") ? c : Quickshell.env("HOME") + "/.config"
+  }
+  readonly property string pluginDir: root.configHome() + "/omarchy/plugins/aaronsr.monitor"
+  readonly property string profilesDir: root.configHome() + "/omarchy/monitor-profiles"
 
   // Carry sub-notch touchpad deltas between wheel events.
   property real wheelAccumulator: 0
@@ -44,8 +52,8 @@ Panel {
   //   "scale"      - 6 Button scale presets; treated as a single
   //                  horizontal row from j/k's perspective. h/l moves
   //                  between presets, identical to bluetooth's header.
-  //   "profiles"   - hyprmoncfg profile list; j/k walks each row.
-  //   "preview"    - applied-profile preview card; Enter opens hyprmoncfg.
+  //   "profiles" - monitor profile list; j/k walks each row.
+  //   "preview"    - applied-profile preview card; Enter opens monitors.lua.
   // Mouse hover on a target updates root state via the components' `hovered`
   // signal so keyboard cursor and pointer share one highlight.
   readonly property var scalePresets: ["1", "1.25", "1.6", "2", "3", "4"]
@@ -170,7 +178,7 @@ Panel {
       return
     }
     if (focusSection === "preview") {
-      openHyprmoncfg()
+      openMonitorsFile()
     }
     // brightness: no separate action; the slider value is the action.
   }
@@ -260,15 +268,49 @@ Panel {
   }
 
   function parseStatus(raw) {
+    var list = []
     try {
       var json = JSON.parse(String(raw || ""))
-      root.activeProfile = (json.active_profile && json.active_profile.name) || ""
-      root.profiles = json.profiles || []
-      root.loadPreview()
-    } catch (e) {
-      root.profiles = []
-      root.activeProfile = ""
-      root.previewOutputs = []
+      if (Array.isArray(json)) list = json
+    } catch (e) {}
+    root.profiles = list
+    root.updateActiveProfile()
+    root.loadPreview()
+  }
+
+  // The active profile is the one whose enabled monitors match the monitors
+  // Hyprland currently has enabled (computed from omarchy-monitor-state).
+  function updateActiveProfile() {
+    var enabled = []
+    for (var i = 0; i < root.displays.length; i++) {
+      var d = root.displays[i]
+      if (d && d.enabled) enabled.push(d.name)
+    }
+    enabled.sort()
+    var key = enabled.join(",")
+
+    var found = ""
+    for (var j = 0; j < root.profiles.length; j++) {
+      var p = root.profiles[j]
+      var pe = []
+      if (p && p.monitors) {
+        for (var k = 0; k < p.monitors.length; k++) {
+          var m = p.monitors[k]
+          if (m && m.enabled) pe.push(m.output)
+        }
+      }
+      pe.sort()
+      if (pe.join(",") === key) { found = p.name; break }
+    }
+
+    root.activeProfile = found
+    if (root.profiles.length) {
+      var rebuilt = []
+      for (var j2 = 0; j2 < root.profiles.length; j2++) {
+        var q = root.profiles[j2]
+        rebuilt.push({ name: q.name, monitors: q.monitors, active: q.name === found })
+      }
+      root.profiles = rebuilt
     }
   }
 
@@ -276,19 +318,19 @@ Panel {
     var name = root.activeProfile
     root.previewOutputs = []
     if (!name) return
-    previewProc.command = ["cat", Quickshell.env("HOME") + "/.config/hyprmoncfg/profiles/" + String(name).toLowerCase() + ".json"]
+    previewProc.command = ["cat", root.profilesDir + "/" + name + ".json"]
     if (!previewProc.running) previewProc.running = true
   }
 
   function parsePreview(raw) {
     try {
       var json = JSON.parse(String(raw || ""))
-      root.previewOutputs = (json.outputs || []).map(function(o) {
+      root.previewOutputs = (json.monitors || []).map(function(m) {
         return {
-          name: o.name || "",
-          enabled: !!o.enabled,
-          mode: o.mode || "",
-          position: (o.x !== undefined && o.y !== undefined) ? (o.x + "," + o.y) : ""
+          name: m.output || "",
+          enabled: !!m.enabled,
+          mode: m.mode || "",
+          position: m.position || ""
         }
       })
     } catch (e) {
@@ -300,13 +342,13 @@ Panel {
     if (!name || root.applying) return
     root.applying = true
     root.close()
-    applyProc.command = ["hyprmoncfg", "apply", name, "--confirm-timeout", String(root.confirmTimeout)]
+    applyProc.command = ["bash", root.pluginDir + "/apply-profile.sh", name]
     applyProc.running = true
   }
 
-  function openHyprmoncfg() {
+  function openMonitorsFile() {
     root.close()
-    if (root.bar) root.bar.run("omarchy-launch-or-focus-tui hyprmoncfg tui")
+    Quickshell.execDetached(["omarchy-launch-config-editor", root.configHome() + "/hypr/monitors.lua"])
   }
 
   // Keybind path (SUPER+SHIFT+P): open the selector focused on the active
@@ -390,7 +432,8 @@ Panel {
   }
 
   function setScale(scale) {
-    actionProc.command = ["bash", "-c", "omarchy-hyprland-monitor-scaling " + scale]
+    if (!root.focusedMonitor) return
+    actionProc.command = ["bash", root.pluginDir + "/set-scale.sh", root.focusedMonitor, scale]
     if (!actionProc.running) actionProc.running = true
   }
 
@@ -486,6 +529,8 @@ Panel {
         root.focusedMonitor = String(lines[5] || "").trim()
         root.monitorScale = root.normalizeScale(String(lines[6] || "").trim())
         root.updateDisplays(String(lines[7] || "[]").trim())
+        root.updateActiveProfile()
+        if (root.activeProfile) root.loadPreview()
       }
     }
   }
@@ -523,7 +568,7 @@ Panel {
 
   Process {
     id: profileProc
-    command: ["hyprmoncfg", "status", "--json"]
+    command: ["bash", root.pluginDir + "/list-profiles.sh"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.parseStatus(text)
@@ -949,7 +994,7 @@ Panel {
                 root.focusSection = "preview"
                 root.selectedIndex = 0
               }
-              onClicked: root.openHyprmoncfg()
+              onClicked: root.openMonitorsFile()
             }
           }
 
@@ -1117,7 +1162,7 @@ Panel {
     verticalPadding: Style.spacing.controlPaddingY
     bordered: true
 
-    active: profile.active
+    active: !!profile.active
     hasCursor: root.cursorActive && root.focusSection === "profiles" && root.selectedIndex === profileIndex
 
     onClicked: root.applyProfile(profile.name)
