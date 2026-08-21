@@ -385,11 +385,22 @@ Panel {
     if (!posProc.running) posProc.running = true
   }
 
+  // Save pending drag positions (one set-position.sh call per moved monitor)
+  // and re-apply the active profile once. Does nothing if nothing moved.
+  function savePendingPositions(pending) {
+    if (!pending || pending.length === 0 || root.applying) return
+    root.applying = true
+    saveProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile, "--positions", JSON.stringify(pending)]
+    saveProc.running = true
+  }
+
+  // Re-center the active profile layout and apply it (also clears any pending
+  // unsaved drags, since the draft resets to the freshly centered layout).
   function recenterLayout() {
     if (!root.activeProfile || root.applying) return
     root.applying = true
-    applyProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile]
-    applyProc.running = true
+    saveProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile]
+    saveProc.running = true
   }
 
   function applyProfile(name) {
@@ -398,11 +409,6 @@ Panel {
     root.close()
     applyProc.command = ["bash", root.pluginDir + "/apply-profile.sh", name]
     applyProc.running = true
-  }
-
-  function openMonitorsFile() {
-    root.close()
-    Quickshell.execDetached(["omarchy-launch-config-editor", root.configHome() + "/hypr/monitors.lua"])
   }
 
   // Keybind path (SUPER+SHIFT+P): open the selector focused on the active
@@ -658,6 +664,18 @@ Panel {
     }
   }
 
+  Process {
+    id: saveProc
+    command: ["true"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function() {
+        root.applying = false
+        Qt.callLater(root.refresh)
+      }
+    }
+  }
+
   // Applies text size via the CLI, which rewrites the shell override file;
   // Style picks the new base-size up through its own file watch, so there's
   // nothing to refresh here.
@@ -711,8 +729,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(560))
+    contentWidth: panel.fittedContentWidth(Style.space(460))
+    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(960))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -1051,24 +1069,6 @@ Panel {
             ProfilePreview {
               width: parent.width
               hasCursor: root.cursorActive && root.focusSection === "preview" && root.selectedIndex === 0
-              onHovered: function(isHovered) {
-                if (!isHovered) return
-                root.cursorActive = true
-                root.focusSection = "preview"
-                root.selectedIndex = 0
-              }
-            }
-
-            Button {
-              text: "✎ EDITAR MONITORS.LUA"
-              fontSize: Style.font.caption
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-              horizontalPadding: Style.spacing.sm
-              verticalPadding: Style.spacing.controlPaddingY
-              bordered: true
-              width: parent.width
-              onClicked: root.openMonitorsFile()
             }
           }
 
@@ -1109,10 +1109,9 @@ Panel {
   component ProfilePreview: Item {
     id: preview
     required property bool hasCursor
-    signal hovered(bool isHovered)
 
-    readonly property bool mouseHover: previewHover.hovered
     readonly property var layoutMonitors: root.previewLayout()
+    property var pending: []
 
     implicitHeight: previewCard.implicitHeight
 
@@ -1120,9 +1119,7 @@ Panel {
       id: previewCard
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: preview.mouseHover || preview.hasCursor
-             ? Style.hoverFillFor(root.bar.foreground, Color.accent)
-             : Style.selectedFillFor(root.bar.foreground, Color.accent)
+      color: Style.selectedFillFor(root.bar.foreground, Color.accent)
       borderSpec: preview.hasCursor
                   ? Border.controlSpec("hover-cursor", root.bar.foreground, Color.accent)
                   : Border.controlSpec("selected", root.bar.foreground, Color.accent)
@@ -1191,6 +1188,56 @@ Panel {
           id: layoutView
           width: parent.width
           monitors: preview.layoutMonitors
+          onPositionsChanged: function(pending) {
+            preview.pending = pending
+          }
+        }
+
+        // Pending-change bar: shown only while there are unsaved drags.
+        Row {
+          id: pendingBar
+          visible: preview.pending.length > 0
+          width: parent.width
+          spacing: Style.space(8)
+
+          Text {
+            text: "Cambios sin guardar"
+            color: Color.accent
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            width: parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2
+          }
+
+          Button {
+            id: discardButton
+            text: "DESCARTAR"
+            fontSize: Style.font.caption
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            horizontalPadding: Style.spacing.sm
+            verticalPadding: Style.spacing.controlPaddingY
+            bordered: true
+            onClicked: layoutView.resetDraft()
+          }
+
+          Button {
+            id: saveButton
+            text: "GUARDAR"
+            fontSize: Style.font.caption
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            horizontalPadding: Style.spacing.sm
+            verticalPadding: Style.spacing.controlPaddingY
+            bordered: true
+            active: true
+            onClicked: {
+              root.savePendingPositions(preview.pending)
+              layoutView.resetDraft()
+            }
+          }
         }
 
         Text {
@@ -1203,30 +1250,76 @@ Panel {
         }
       }
     }
-
-    // HoverHandler (not a MouseArea) so the card can highlight on hover
-    // without swallowing mouse events meant for the repositioning canvas.
-    HoverHandler {
-      id: previewHover
-      onHoveredChanged: preview.hovered(hovered)
-    }
   }
 
   // Interactive layout view: draws the active profile's enabled monitors at
-  // their relative logical positions; drag a monitor to reposition it.
+  // their relative logical positions; drag a monitor to reposition it. Dragging
+  // only updates the in-memory draft — nothing is applied until the caller
+  // saves (see ProfilePreview).
   component LayoutView: Item {
     id: canvas
     required property var monitors
+    signal positionsChanged(var pending)
 
-    implicitHeight: Style.space(150)
-    readonly property bool draggable: (monitors || []).length > 1
+    // Editable working copy of the monitors.
+    property var draft: []
+    // Positions that changed since the draft was last reset (or saved).
+    property var pending: []
+
+    implicitHeight: Style.space(240)
+    readonly property bool draggable: (draft || []).length > 1
     readonly property real pad: Style.space(10)
     property real fitScale: 1
     property real offsetX: 0
     property real offsetY: 0
 
+    function cloneMonitors(mons) {
+      var out = []
+      for (var i = 0; i < (mons || []).length; i++) {
+        var m = mons[i]
+        out.push({ name: m.name, x: m.x, y: m.y, w: m.w, h: m.h })
+      }
+      return out
+    }
+
+    function resetDraft() {
+      canvas.draft = canvas.cloneMonitors(canvas.monitors)
+      canvas.pending = []
+    }
+
+    // Record a dropped monitor position in the draft and pending list.
+    // Implemented as a canvas method and invoked from the delegate via the
+    // `layout` property so we never resolve `canvas` inside the Repeater
+    // delegate scope (which QML does not expose).
+    function recordDrop(name, absX, absY) {
+      var idx = -1
+      for (var i = 0; i < canvas.draft.length; i++) {
+        if (canvas.draft[i].name === name) { idx = i; break }
+      }
+      if (idx < 0) return
+      var updated = canvas.draft[idx]
+      updated.x = absX
+      updated.y = absY
+      var fresh = canvas.draft.slice()
+      fresh[idx] = updated
+      canvas.draft = fresh
+
+      var pend = canvas.pending.slice()
+      var found = false
+      for (var j = 0; j < pend.length; j++) {
+        if (pend[j].output === name) {
+          pend[j].x = absX; pend[j].y = absY; found = true; break
+        }
+      }
+      if (!found) pend.push({ output: name, x: absX, y: absY })
+      canvas.pending = pend
+      canvas.positionsChanged(pend)
+    }
+
+    onMonitorsChanged: resetDraft()
+
     function computeFit() {
-      var mons = canvas.monitors || []
+      var mons = canvas.draft || []
       if (!mons.length || canvas.width <= 0) return
       var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
       for (var i = 0; i < mons.length; i++) {
@@ -1246,7 +1339,10 @@ Panel {
       canvas.offsetY = canvas.pad - minY * s
     }
 
-    onMonitorsChanged: computeFit()
+    onDraftChanged: {
+      computeFit()
+      if (layer) layer.rebuild()
+    }
     onWidthChanged: computeFit()
 
     Rectangle {
@@ -1257,16 +1353,39 @@ Panel {
       opacity: 0.12
     }
 
-    Repeater {
-      model: canvas.monitors
+    // Monitor rectangles are created dynamically so they can reference this
+    // canvas directly (Repeater delegates in an inline component cannot).
+    Item {
+      id: layer
+      anchors.fill: parent
 
-      delegate: Rectangle {
-        required property var modelData
+      function rebuild() {
+        var toDestroy = []
+        for (var i = 0; i < layer.children.length; i++) toDestroy.push(layer.children[i])
+        for (var j = 0; j < toDestroy.length; j++) toDestroy[j].destroy()
 
-        x: modelData.x * canvas.fitScale + canvas.offsetX
-        y: modelData.y * canvas.fitScale + canvas.offsetY
-        width: Math.max(24, modelData.w * canvas.fitScale)
-        height: Math.max(14, modelData.h * canvas.fitScale)
+        var mons = canvas.draft || []
+        for (var k = 0; k < mons.length; k++) {
+          var m = mons[k]
+          var obj = monitorComponent.createObject(layer, { mIndex: k })
+          obj.monitorName = m.name
+        }
+      }
+    }
+
+    Component {
+      id: monitorComponent
+      Rectangle {
+        property int mIndex: -1
+        property string monitorName: ""
+
+        readonly property var layout: canvas
+        readonly property var modelData: (canvas.draft && mIndex >= 0 && mIndex < canvas.draft.length) ? canvas.draft[mIndex] : null
+
+        x: modelData ? modelData.x * layout.fitScale + layout.offsetX : 0
+        y: modelData ? modelData.y * layout.fitScale + layout.offsetY : 0
+        width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
+        height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Math.max(2, Style.space(2))
         color: Style.selectedFillFor(root.bar.foreground, Color.accent)
         border.width: 1
@@ -1274,7 +1393,7 @@ Panel {
 
         Text {
           anchors.centerIn: parent
-          text: modelData.name
+          text: parent.monitorName
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
@@ -1286,17 +1405,17 @@ Panel {
 
         MouseArea {
           anchors.fill: parent
-          enabled: canvas.draggable
-          hoverEnabled: canvas.draggable
-          cursorShape: canvas.draggable ? Qt.SizeAllCursor : Qt.ArrowCursor
+          enabled: parent.layout.draggable
+          hoverEnabled: parent.layout.draggable
+          cursorShape: parent.layout.draggable ? Qt.SizeAllCursor : Qt.ArrowCursor
           drag.target: parent
           drag.threshold: 2
           onReleased: function() {
-            if (!canvas.draggable) return
-            var absX = Math.round((parent.x - canvas.offsetX) / canvas.fitScale)
-            var absY = Math.round((parent.y - canvas.offsetY) / canvas.fitScale)
-            if (absX === modelData.x && absY === modelData.y) return
-            root.setMonitorPosition(modelData.name, absX, absY)
+            if (!parent.layout.draggable) return
+            var absX = Math.round((parent.x - parent.layout.offsetX) / parent.layout.fitScale)
+            var absY = Math.round((parent.y - parent.layout.offsetY) / parent.layout.fitScale)
+            if (absX === parent.modelData.x && absY === parent.modelData.y) return
+            parent.layout.recordDrop(parent.monitorName, absX, absY)
           }
         }
       }
