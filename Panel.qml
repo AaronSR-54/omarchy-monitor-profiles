@@ -1423,13 +1423,13 @@ Panel {
       canvas.fitScale = s
 
       // Center the layout content in the canvas both horizontally and
-      // vertically, regardless of the monitors' absolute coordinates.
+      // vertically, regardless of the monitors' absolute coordinates. Use the
+      // raw bbox origin (including negatives) so content above/left of the
+      // origin stays inside the visible canvas.
       var contentW = bw * s
       var contentH = bh * s
-      var left = Math.max(minX, 0)
-      var top = Math.max(minY, 0)
-      canvas.offsetX = canvas.pad + (canvas.width - canvas.pad * 2 - contentW) / 2 - left * s
-      canvas.offsetY = canvas.pad + (canvas.implicitHeight - canvas.pad * 2 - contentH) / 2 - top * s
+      canvas.offsetX = canvas.pad + (canvas.width - canvas.pad * 2 - contentW) / 2 - minX * s
+      canvas.offsetY = canvas.pad + (canvas.implicitHeight - canvas.pad * 2 - contentH) / 2 - minY * s
     }
 
     onDraftChanged: {
@@ -1437,6 +1437,7 @@ Panel {
       if (monitorHost) monitorHost.rebuild()
     }
     onWidthChanged: computeFit()
+    onHeightChanged: computeFit()
 
     // Single dark container: the layout background AND the parent the monitor
     // rectangles are created into. A subtle grid reinforces that the area is
@@ -1587,8 +1588,10 @@ Panel {
           cursorShape: parent.layout.draggable ? Qt.SizeAllCursor : Qt.ArrowCursor
           drag.target: parent
           drag.threshold: 2
+          onPressed: if (parent.layout.draggable) parent.z = 100
           onReleased: function() {
             if (!parent.layout.draggable) return
+            parent.z = 0
             var absX = Math.round((parent.x - parent.layout.offsetX) / parent.layout.fitScale)
             var absY = Math.round((parent.y - parent.layout.offsetY) / parent.layout.fitScale)
             if (absX === parent.modelData.x && absY === parent.modelData.y) return
