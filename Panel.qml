@@ -369,7 +369,12 @@ Panel {
       var arr = JSON.parse(String(raw || ""))
       for (var i = 0; i < (arr || []).length; i++) {
         var m = arr[i]
-        if (m && m.name) map[m.name] = m.description || ""
+        if (!m || !m.name) continue
+        // Short name: make + model, no serial.
+        var parts = []
+        if (m.make) parts.push(m.make)
+        if (m.model) parts.push(m.model)
+        map[m.name] = parts.join(" ")
       }
     } catch (e) {}
     root.monitorDescriptions = map
