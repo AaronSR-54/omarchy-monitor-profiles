@@ -1289,7 +1289,9 @@ Panel {
     }
 
     // Snap the dragged monitor so it cannot overlap others and lands glued to
-    // the nearest one. Returns the corrected {x, y}.
+    // the nearest one. If it is dropped overlapping another, it is pushed out
+    // to the side it penetrates least, so a small screen never hides inside a
+    // big one. Returns the corrected {x, y}.
     function snapMonitor(drag) {
       var mons = canvas.draft || []
       var others = []
@@ -1301,14 +1303,10 @@ Panel {
       // Find the nearest other monitor by the minimum edge gap.
       var best = null
       var bestGap = 1e18
-      var bestSide = ""
       for (var j = 0; j < others.length; j++) {
         var o = others[j]
-        // horizontal gap (0 if they overlap in x)
         var gapX = Math.max(o.x - (drag.x + drag.w), drag.x - (o.x + o.w), 0)
-        // vertical gap (0 if they overlap in y)
         var gapY = Math.max(o.y - (drag.y + drag.h), drag.y - (o.y + o.h), 0)
-        // gap = distance between the rectangles (0 if they touch/overlap)
         var g = Math.sqrt(gapX * gapX + gapY * gapY)
         if (g < bestGap) {
           bestGap = g
@@ -1317,33 +1315,52 @@ Panel {
       }
       if (!best) return { x: drag.x, y: drag.y }
 
-      // Which side of `best` to attach to: pick the closest gap axis.
+      // Distances from the dragged monitor's edges to `best`'s edges.
+      // Positive = a gap on that side; negative = overlap on that side.
       var rGap = drag.x - (best.x + best.w)      // drag is to the right
       var lGap = best.x - (drag.x + drag.w)      // drag is to the left
       var dGap = drag.y - (best.y + best.h)      // drag is below
       var uGap = best.y - (drag.y + drag.h)      // drag is above
 
-      // Signed values > 0 mean a real gap on that side; negative means overlap.
-      var sides = [
-        { gap: rGap, side: "right" },
-        { gap: lGap, side: "left" },
-        { gap: dGap, side: "down" },
-        { gap: uGap, side: "up" }
-      ]
-      var chosen = sides[0]
-      for (var k = 1; k < sides.length; k++) {
-        if (sides[k].gap > chosen.gap) chosen = sides[k]
+      var overlapping = rGap < 0 && lGap < 0 && dGap < 0 && uGap < 0
+
+      var side
+      if (overlapping) {
+        // Push out on the side it penetrates least (largest = least negative).
+        var sides = [
+          { gap: rGap, side: "right" },
+          { gap: lGap, side: "left" },
+          { gap: dGap, side: "down" },
+          { gap: uGap, side: "up" }
+        ]
+        side = sides[0]
+        for (var k = 1; k < sides.length; k++) {
+          if (sides[k].gap > side.gap) side = sides[k]
+        }
+        side = side.side
+      } else {
+        // Not overlapping: glue to the nearest side (largest positive gap),
+        // keeping the dragged monitor's offset on the other axis.
+        var sides2 = [
+          { gap: rGap, side: "right" },
+          { gap: lGap, side: "left" },
+          { gap: dGap, side: "down" },
+          { gap: uGap, side: "up" }
+        ]
+        var chosen = sides2[0]
+        for (var k2 = 1; k2 < sides2.length; k2++) {
+          if (sides2[k2].gap > chosen.gap) chosen = sides2[k2]
+        }
+        side = chosen.side
       }
 
-      // Glue the dragged monitor against that side of `best`, keeping its own
-      // offset along the perpendicular axis (no forced centering).
       var nx = drag.x
       var ny = drag.y
-      if (chosen.side === "right") {
+      if (side === "right") {
         nx = best.x + best.w
-      } else if (chosen.side === "left") {
+      } else if (side === "left") {
         nx = best.x - drag.w
-      } else if (chosen.side === "down") {
+      } else if (side === "down") {
         ny = best.y + best.h
       } else { // up
         ny = best.y - drag.h
