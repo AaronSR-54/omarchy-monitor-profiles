@@ -1325,22 +1325,18 @@ Panel {
         if (sides[k].gap > chosen.gap) chosen = sides[k]
       }
 
-      // Glue the dragged monitor against that side of `best`, keeping the
-      // dragged monitor's other-axis offset relative to `best`'s center.
+      // Glue the dragged monitor against that side of `best`, keeping its own
+      // offset along the perpendicular axis (no forced centering).
       var nx = drag.x
       var ny = drag.y
       if (chosen.side === "right") {
         nx = best.x + best.w
-        ny = best.y + (best.h - drag.h) / 2
       } else if (chosen.side === "left") {
         nx = best.x - drag.w
-        ny = best.y + (best.h - drag.h) / 2
       } else if (chosen.side === "down") {
         ny = best.y + best.h
-        nx = best.x + (best.w - drag.w) / 2
       } else { // up
         ny = best.y - drag.h
-        nx = best.x + (best.w - drag.w) / 2
       }
 
       return { x: Math.round(nx), y: Math.round(ny) }
