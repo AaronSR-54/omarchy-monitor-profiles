@@ -1177,19 +1177,24 @@ Panel {
 
       // Helper / pending-change controls. Shows the drag hint, or the
       // unsaved-changes label + actions once the user starts repositioning.
+      // Fixed height + single-line text so nothing jumps when the buttons
+      // appear/disappear.
       Row {
         id: controlsRow
         width: parent.width
+        height: Math.max(saveButton.implicitHeight, discardButton.implicitHeight)
         spacing: Style.space(8)
         visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
 
         Text {
+          id: helperText
           text: preview.pending.length > 0 ? "Cambios sin guardar" : "Arrastra un monitor para reposicionarlo"
           color: preview.pending.length > 0 ? Color.accent : Qt.darker(root.bar.foreground, 1.4)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
           anchors.verticalCenter: parent.verticalCenter
+          maximumLineCount: 1
           elide: Text.ElideRight
           width: preview.pending.length > 0
                  ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2)
