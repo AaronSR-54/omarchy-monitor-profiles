@@ -1113,106 +1113,92 @@ Panel {
     readonly property var layoutMonitors: root.previewLayout()
     property var pending: []
 
-    implicitHeight: previewCard.implicitHeight
+    implicitHeight: previewContent.implicitHeight
 
-    BorderSurface {
-      id: previewCard
-      anchors.fill: parent
-      radius: Style.cornerRadius
-      color: Style.selectedFillFor(root.bar.foreground, Color.accent)
-      borderSpec: preview.hasCursor
-                  ? Border.controlSpec("hover-cursor", root.bar.foreground, Color.accent)
-                  : Border.controlSpec("selected", root.bar.foreground, Color.accent)
-      padding: Style.space(10)
-      implicitHeight: previewContent.implicitHeight + contentTopInset + contentBottomInset
+    Column {
+      id: previewContent
+      width: parent.width
+      spacing: Style.space(8)
 
-      Column {
-        id: previewContent
-        width: parent.width - parent.contentLeftInset - parent.contentRightInset
-        x: parent.contentLeftInset
-        y: parent.contentTopInset
+      LayoutView {
+        id: layoutView
+        width: parent.width
+        monitors: preview.layoutMonitors
+        onPositionsChanged: function(pending) {
+          preview.pending = pending
+        }
+      }
+
+      // Pending-change + recenter controls.
+      Row {
+        id: controlsRow
+        width: parent.width
         spacing: Style.space(8)
-
-        LayoutView {
-          id: layoutView
-          width: parent.width
-          monitors: preview.layoutMonitors
-          onPositionsChanged: function(pending) {
-            preview.pending = pending
-          }
-        }
-
-        // Pending-change + recenter controls.
-        Row {
-          id: controlsRow
-          width: parent.width
-          spacing: Style.space(8)
-          visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
-
-          Text {
-            text: "Cambios sin guardar"
-            visible: preview.pending.length > 0
-            color: Color.accent
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            anchors.verticalCenter: parent.verticalCenter
-            elide: Text.ElideRight
-            width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - centerButton.implicitWidth - parent.spacing * 3) : 0
-          }
-
-          Button {
-            id: discardButton
-            text: "DESCARTAR"
-            visible: preview.pending.length > 0
-            fontSize: Style.font.caption
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            horizontalPadding: Style.spacing.sm
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            onClicked: layoutView.resetDraft()
-          }
-
-          Button {
-            id: saveButton
-            text: "GUARDAR"
-            visible: preview.pending.length > 0
-            fontSize: Style.font.caption
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            horizontalPadding: Style.spacing.sm
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            active: true
-            onClicked: {
-              root.savePendingPositions(preview.pending)
-              layoutView.resetDraft()
-            }
-          }
-
-          Button {
-            id: centerButton
-            text: "⟳ CENTRAR"
-            visible: preview.layoutMonitors.length > 1
-            fontSize: Style.font.caption
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            horizontalPadding: Style.spacing.sm
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            onClicked: root.recenterLayout()
-          }
-        }
+        visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
 
         Text {
-          visible: preview.layoutMonitors.length === 0
-          text: root.activeProfile ? "No monitors in profile" : "No profile applied"
-          color: Qt.darker(root.bar.foreground, 1.4)
+          text: "Cambios sin guardar"
+          visible: preview.pending.length > 0
+          color: Color.accent
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
-          width: parent.width
+          font.bold: true
+          anchors.verticalCenter: parent.verticalCenter
+          elide: Text.ElideRight
+          width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - centerButton.implicitWidth - parent.spacing * 3) : 0
         }
+
+        Button {
+          id: discardButton
+          text: "DESCARTAR"
+          visible: preview.pending.length > 0
+          fontSize: Style.font.caption
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          horizontalPadding: Style.spacing.sm
+          verticalPadding: Style.spacing.controlPaddingY
+          bordered: true
+          onClicked: layoutView.resetDraft()
+        }
+
+        Button {
+          id: saveButton
+          text: "GUARDAR"
+          visible: preview.pending.length > 0
+          fontSize: Style.font.caption
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          horizontalPadding: Style.spacing.sm
+          verticalPadding: Style.spacing.controlPaddingY
+          bordered: true
+          active: true
+          onClicked: {
+            root.savePendingPositions(preview.pending)
+            layoutView.resetDraft()
+          }
+        }
+
+        Button {
+          id: centerButton
+          text: "⟳ CENTRAR"
+          visible: preview.layoutMonitors.length > 1
+          fontSize: Style.font.caption
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          horizontalPadding: Style.spacing.sm
+          verticalPadding: Style.spacing.controlPaddingY
+          bordered: true
+          onClicked: root.recenterLayout()
+        }
+      }
+
+      Text {
+        visible: preview.layoutMonitors.length === 0
+        text: root.activeProfile ? "No monitors in profile" : "No profile applied"
+        color: Qt.darker(root.bar.foreground, 1.4)
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.caption
+        width: parent.width
       }
     }
   }
@@ -1323,9 +1309,9 @@ Panel {
       id: layer
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: Qt.darker(root.bar.foreground, 1.8)
+      color: Qt.rgba(0.06, 0.06, 0.08, 0.95)
       border.width: 1
-      border.color: Qt.darker(root.bar.foreground, 1.4)
+      border.color: Qt.darker(root.bar.foreground, 2.2)
       clip: true
 
       function rebuild() {
@@ -1356,9 +1342,9 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Math.max(2, Style.space(2))
-        color: Qt.rgba(0.12, 0.12, 0.14, 0.9)
+        color: Qt.rgba(0.18, 0.18, 0.22, 1.0)
         border.width: 1
-        border.color: Qt.darker(root.bar.foreground, 1.4)
+        border.color: Qt.darker(root.bar.foreground, 1.7)
 
         Text {
           anchors.centerIn: parent
