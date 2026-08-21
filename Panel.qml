@@ -619,8 +619,11 @@ Panel {
         root.focusedMonitor = String(lines[5] || "").trim()
         root.monitorScale = root.normalizeScale(String(lines[6] || "").trim())
         root.updateDisplays(String(lines[7] || "[]").trim())
+        // Only reload the profile preview when the active profile actually
+        // changed — the 5s poll must not re-read it (flicker) every tick.
+        var prevActive = root.activeProfile
         root.updateActiveProfile()
-        if (root.activeProfile) root.loadPreview()
+        if (root.activeProfile && root.activeProfile !== prevActive) root.loadPreview()
       }
     }
   }
