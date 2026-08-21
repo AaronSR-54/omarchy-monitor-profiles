@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "aaronsr.monitor",
+  "name": "Display & profiles",
+  "version": "1.0.0",
+  "author": "Aaron Sanz Roca",
+  "description": "Display controls (brightness, scale, text size) plus a hyprmoncfg monitor profile switcher. Requires hyprmoncfg — the profiles come from ~/.config/hyprmoncfg/profiles/.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Display & profiles",
+    "description": "Display controls plus a hyprmoncfg monitor profile switcher. Requires hyprmoncfg.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "confirmTimeout": 0
+    },
+    "schema": [
+      {
+        "key": "confirmTimeout",
+        "type": "number",
+        "label": "Apply confirmation timeout (seconds, 0 disables revert)"
+      }
+    ]
+  }
+}
