@@ -424,15 +424,6 @@ Panel {
     saveProc.running = true
   }
 
-  // Re-center the active profile layout and apply it (also clears any pending
-  // unsaved drags, since the draft resets to the freshly centered layout).
-  function recenterLayout() {
-    if (!root.activeProfile || root.applying) return
-    root.applying = true
-    saveProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile]
-    saveProc.running = true
-  }
-
   function applyProfile(name) {
     if (!name || root.applying) return
     root.applying = true
@@ -1169,25 +1160,12 @@ Panel {
         }
       }
 
-      // Pending-change + recenter controls.
+      // Pending-change controls.
       Row {
         id: controlsRow
         width: parent.width
         spacing: Style.space(8)
-        visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
-
-        Button {
-          id: centerButton
-          text: "⟳ CENTRAR"
-          visible: preview.layoutMonitors.length > 1
-          fontSize: Style.font.caption
-          foreground: root.bar.foreground
-          fontFamily: root.bar.fontFamily
-          horizontalPadding: Style.spacing.sm
-          verticalPadding: Style.spacing.controlPaddingY
-          bordered: true
-          onClicked: root.recenterLayout()
-        }
+        visible: preview.pending.length > 0
 
         Text {
           text: "Cambios sin guardar"
@@ -1198,7 +1176,7 @@ Panel {
           font.bold: true
           anchors.verticalCenter: parent.verticalCenter
           elide: Text.ElideRight
-          width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - centerButton.implicitWidth - parent.spacing * 3) : 0
+          width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2) : 0
         }
 
         Button {
@@ -1276,6 +1254,15 @@ Panel {
     function resetDraft() {
       canvas.draft = canvas.cloneMonitors(canvas.monitors)
       canvas.pending = []
+    }
+
+    // Repopulate the draft from the source monitors, but never clobber
+    // unsaved drags: a periodic refresh re-reads the profile and would
+    // otherwise wipe the user's in-progress repositioning.
+    function reloadIfClean() {
+      if ((canvas.pending || []).length === 0) {
+        canvas.draft = canvas.cloneMonitors(canvas.monitors)
+      }
     }
 
     // Snap the dragged monitor so it cannot overlap others and lands glued to
@@ -1375,7 +1362,7 @@ Panel {
       canvas.positionsChanged(pend)
     }
 
-    onMonitorsChanged: resetDraft()
+    onMonitorsChanged: reloadIfClean()
 
     function computeFit() {
       var mons = canvas.draft || []
