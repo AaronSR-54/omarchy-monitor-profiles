@@ -1188,7 +1188,7 @@ Panel {
 
         Text {
           id: helperText
-          text: preview.pending.length > 0 ? "Cambios sin guardar" : "Arrastra un monitor para reposicionarlo"
+          text: preview.pending.length > 0 ? "Unsaved changes" : "Drag a monitor to reposition it"
           color: preview.pending.length > 0 ? Color.accent : Qt.darker(root.bar.foreground, 1.4)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
@@ -1203,7 +1203,7 @@ Panel {
 
         Button {
           id: discardButton
-          text: "DESCARTAR"
+          text: "DISCARD"
           visible: preview.pending.length > 0
           fontSize: Style.font.caption
           foreground: root.bar.foreground
@@ -1216,7 +1216,7 @@ Panel {
 
         Button {
           id: saveButton
-          text: "GUARDAR"
+          text: "SAVE"
           visible: preview.pending.length > 0
           fontSize: Style.font.caption
           foreground: root.bar.foreground
