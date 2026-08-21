@@ -1417,12 +1417,13 @@ Panel {
 
     onDraftChanged: {
       computeFit()
-      if (layer) layer.rebuild()
+      if (monitorHost) monitorHost.rebuild()
     }
     onWidthChanged: computeFit()
 
     // Single dark container: the layout background AND the parent the monitor
-    // rectangles are created into.
+    // rectangles are created into. A subtle grid reinforces that the area is
+    // draggable.
     Rectangle {
       id: layer
       anchors.fill: parent
@@ -1432,16 +1433,56 @@ Panel {
       border.color: Color.menu.border
       clip: true
 
-      function rebuild() {
-        var toDestroy = []
-        for (var i = 0; i < layer.children.length; i++) toDestroy.push(layer.children[i])
-        for (var j = 0; j < toDestroy.length; j++) toDestroy[j].destroy()
+      // Background grid, drawn once (it is a fixed child of the layer).
+      Canvas {
+        id: gridLayer
+        anchors.fill: parent
+        visible: canvas.draggable
 
-        var mons = canvas.draft || []
-        for (var k = 0; k < mons.length; k++) {
-          var m = mons[k]
-          var obj = monitorComponent.createObject(layer, { mIndex: k })
-          obj.monitorName = m.name
+        readonly property real grid: 18
+
+        onPaint: {
+          var ctx = getContext("2d")
+          ctx.reset()
+          var w = gridLayer.width
+          var h = gridLayer.height
+          var g = gridLayer.grid
+          ctx.strokeStyle = Qt.rgba(1, 1, 1, 0.04)
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          for (var x = 0; x <= w; x += g) {
+            ctx.moveTo(x + 0.5, 0)
+            ctx.lineTo(x + 0.5, h)
+          }
+          for (var y = 0; y <= h; y += g) {
+            ctx.moveTo(0, y + 0.5)
+            ctx.lineTo(w, y + 0.5)
+          }
+          ctx.stroke()
+        }
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onVisibleChanged: requestPaint()
+      }
+
+      // Monitors live in their own host so rebuild() only touches them and
+      // never the grid or the layer itself.
+      Item {
+        id: monitorHost
+        anchors.fill: parent
+
+        function rebuild() {
+          var toDestroy = []
+          for (var i = 0; i < monitorHost.children.length; i++) toDestroy.push(monitorHost.children[i])
+          for (var j = 0; j < toDestroy.length; j++) toDestroy[j].destroy()
+
+          var mons = canvas.draft || []
+          for (var k = 0; k < mons.length; k++) {
+            var m = mons[k]
+            var obj = monitorComponent.createObject(monitorHost, { mIndex: k })
+            obj.monitorName = m.name
+          }
         }
       }
     }
