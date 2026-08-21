@@ -35,6 +35,9 @@ Panel {
   property var previewOutputs: []
   property bool applying: false
 
+  // Map of monitor output -> physical name (description), from hyprctl.
+  property var monitorDescriptions: ({})
+
   function configHome() {
     var c = Quickshell.env("XDG_CONFIG_HOME")
     return (c && c !== "") ? c : Quickshell.env("HOME") + "/.config"
@@ -256,6 +259,7 @@ Panel {
   function refresh() {
     if (!stateProc.running) stateProc.running = true
     if (!profileProc.running) profileProc.running = true
+    if (!descProc.running) descProc.running = true
   }
 
   readonly property int activeIndex: {
@@ -359,6 +363,24 @@ Panel {
     }
   }
 
+  function parseDescriptions(raw) {
+    var map = {}
+    try {
+      var arr = JSON.parse(String(raw || ""))
+      for (var i = 0; i < (arr || []).length; i++) {
+        var m = arr[i]
+        if (m && m.name) map[m.name] = m.description || ""
+      }
+    } catch (e) {}
+    root.monitorDescriptions = map
+  }
+
+  function displayName(output) {
+    var desc = root.monitorDescriptions[output]
+    if (desc && desc !== output) return output + " (" + desc + ")"
+    return output
+  }
+
   // Logical layout of the active profile's enabled monitors for the
   // repositioning canvas: { name, x, y, w, h, mode, position } in unscaled px.
   function previewLayout() {
@@ -370,6 +392,7 @@ Panel {
       var s = Number(m.scale) || 1
       out.push({
         name: m.name,
+        display: root.displayName(m.name),
         x: m.x,
         y: m.y,
         w: (m.width || 0) / s,
@@ -654,6 +677,16 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.parsePreview(text)
+    }
+  }
+
+  // Physical monitor names (descriptions) for the layout tiles.
+  Process {
+    id: descProc
+    command: ["hyprctl", "monitors", "all", "-j"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.parseDescriptions(text)
     }
   }
 
@@ -1230,7 +1263,7 @@ Panel {
       var out = []
       for (var i = 0; i < (mons || []).length; i++) {
         var m = mons[i]
-        out.push({ name: m.name, x: m.x, y: m.y, w: m.w, h: m.h, mode: m.mode || "", position: m.position || "" })
+        out.push({ name: m.name, display: m.display || m.name, x: m.x, y: m.y, w: m.w, h: m.h, mode: m.mode || "", position: m.position || "" })
       }
       return out
     }
@@ -1240,20 +1273,91 @@ Panel {
       canvas.pending = []
     }
 
-    // Record a dropped monitor position in the draft and pending list.
-    // Implemented as a canvas method and invoked from the delegate via the
-    // `layout` property so we never resolve `canvas` inside the Repeater
-    // delegate scope (which QML does not expose).
+    // Snap the dragged monitor so it cannot overlap others and lands glued to
+    // the nearest one. Returns the corrected {x, y}.
+    function snapMonitor(drag) {
+      var mons = canvas.draft || []
+      var others = []
+      for (var i = 0; i < mons.length; i++) {
+        if (mons[i].name !== drag.name) others.push(mons[i])
+      }
+      if (others.length === 0) return { x: drag.x, y: drag.y }
+
+      // Find the nearest other monitor by the minimum edge gap.
+      var best = null
+      var bestGap = 1e18
+      var bestSide = ""
+      for (var j = 0; j < others.length; j++) {
+        var o = others[j]
+        // horizontal gap (0 if they overlap in x)
+        var gapX = Math.max(o.x - (drag.x + drag.w), drag.x - (o.x + o.w), 0)
+        // vertical gap (0 if they overlap in y)
+        var gapY = Math.max(o.y - (drag.y + drag.h), drag.y - (o.y + o.h), 0)
+        // gap = distance between the rectangles (0 if they touch/overlap)
+        var g = Math.sqrt(gapX * gapX + gapY * gapY)
+        if (g < bestGap) {
+          bestGap = g
+          best = o
+        }
+      }
+      if (!best) return { x: drag.x, y: drag.y }
+
+      // Which side of `best` to attach to: pick the closest gap axis.
+      var rGap = drag.x - (best.x + best.w)      // drag is to the right
+      var lGap = best.x - (drag.x + drag.w)      // drag is to the left
+      var dGap = drag.y - (best.y + best.h)      // drag is below
+      var uGap = best.y - (drag.y + drag.h)      // drag is above
+
+      // Signed values > 0 mean a real gap on that side; negative means overlap.
+      var sides = [
+        { gap: rGap, side: "right" },
+        { gap: lGap, side: "left" },
+        { gap: dGap, side: "down" },
+        { gap: uGap, side: "up" }
+      ]
+      var chosen = sides[0]
+      for (var k = 1; k < sides.length; k++) {
+        if (sides[k].gap > chosen.gap) chosen = sides[k]
+      }
+
+      // Glue the dragged monitor against that side of `best`, keeping the
+      // dragged monitor's other-axis offset relative to `best`'s center.
+      var nx = drag.x
+      var ny = drag.y
+      if (chosen.side === "right") {
+        nx = best.x + best.w
+        ny = best.y + (best.h - drag.h) / 2
+      } else if (chosen.side === "left") {
+        nx = best.x - drag.w
+        ny = best.y + (best.h - drag.h) / 2
+      } else if (chosen.side === "down") {
+        ny = best.y + best.h
+        nx = best.x + (best.w - drag.w) / 2
+      } else { // up
+        ny = best.y - drag.h
+        nx = best.x + (best.w - drag.w) / 2
+      }
+
+      return { x: Math.round(nx), y: Math.round(ny) }
+    }
+
     function recordDrop(name, absX, absY) {
       var idx = -1
       for (var i = 0; i < canvas.draft.length; i++) {
         if (canvas.draft[i].name === name) { idx = i; break }
       }
       if (idx < 0) return
+
+      // Build a temporary drag object, snap it against the others, then commit.
+      var drag = canvas.draft[idx]
+      var snapped = canvas.snapMonitor({ name: drag.name, x: absX, y: absY, w: drag.w, h: drag.h })
+      var fx = snapped.x
+      var fy = snapped.y
+
       var updated = canvas.draft[idx]
-      updated.x = absX
-      updated.y = absY
-      updated.position = absX + "x" + absY
+      updated.x = fx
+      updated.y = fy
+      updated.position = fx + "x" + fy
       var fresh = canvas.draft.slice()
       fresh[idx] = updated
       canvas.draft = fresh
@@ -1262,10 +1366,10 @@ Panel {
       var found = false
       for (var j = 0; j < pend.length; j++) {
         if (pend[j].output === name) {
-          pend[j].x = absX; pend[j].y = absY; found = true; break
+          pend[j].x = fx; pend[j].y = fy; found = true; break
         }
       }
-      if (!found) pend.push({ output: name, x: absX, y: absY })
+      if (!found) pend.push({ output: name, x: fx, y: fy })
       canvas.pending = pend
       canvas.positionsChanged(pend)
     }
@@ -1349,16 +1453,17 @@ Panel {
         border.width: 1
         border.color: Color.menu.selectedBorder
 
-        // "2560x1440 · 120Hz · 1979x-100"
-        readonly property string infoText: {
+        // "2560x1440 · 120Hz" and, one line below, "1979x-100"
+        readonly property string specText: {
           var parts = []
           var dims = String(modelData ? modelData.mode : "").split("@")[0]
           if (dims) parts.push(dims)
           var m = String(modelData ? modelData.mode : "").split("@")[1] || ""
           if (m) parts.push(parseInt(m, 10) + "Hz")
-          if (modelData && modelData.position) parts.push(modelData.position)
           return parts.join(" · ")
         }
+        readonly property string positionText: modelData && modelData.position ? modelData.position : ""
+        readonly property string displayText: modelData && modelData.display ? modelData.display : (modelData ? modelData.name : "")
 
         Column {
           anchors.centerIn: parent
@@ -1367,7 +1472,7 @@ Panel {
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: parent.parent.monitorName
+            text: parent.parent.displayText
             color: root.bar.foreground
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
@@ -1379,9 +1484,21 @@ Panel {
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: parent.parent.infoText
+            text: parent.parent.specText
             visible: parent.parent.width >= Style.space(46)
             color: Qt.darker(root.bar.foreground, 1.4)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideMiddle
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+          }
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: parent.parent.positionText
+            visible: parent.parent.width >= Style.space(46) && parent.parent.positionText !== ""
+            color: Qt.darker(root.bar.foreground, 1.5)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
             elide: Text.ElideMiddle
