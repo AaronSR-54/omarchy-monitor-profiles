@@ -1133,57 +1133,6 @@ Panel {
         y: parent.contentTopInset
         spacing: Style.space(8)
 
-        Item {
-          width: parent.width
-          implicitHeight: Math.max(appliedLabel.implicitHeight, appliedName.implicitHeight, centerButton.implicitHeight)
-
-          Text {
-            id: appliedLabel
-            text: "APPLIED"
-            color: Qt.darker(root.bar.foreground, 1.4)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            font.letterSpacing: 1.2
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          Text {
-            id: appliedName
-            text: root.activeProfile ? root.activeProfile.toUpperCase() : "—"
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            elide: Text.ElideRight
-            anchors.right: centerButton.left
-            anchors.rightMargin: Style.space(8)
-            anchors.left: appliedLabel.right
-            anchors.leftMargin: Style.space(8)
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          Button {
-            id: centerButton
-            text: "⟳ CENTRAR"
-            fontSize: Style.font.caption
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            horizontalPadding: Style.spacing.sm
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            visible: preview.layoutMonitors.length > 1
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: root.recenterLayout()
-          }
-        }
-
-        PanelSeparator {
-          foreground: root.bar.foreground
-        }
-
         LayoutView {
           id: layoutView
           width: parent.width
@@ -1193,27 +1142,29 @@ Panel {
           }
         }
 
-        // Pending-change bar: shown only while there are unsaved drags.
+        // Pending-change + recenter controls.
         Row {
-          id: pendingBar
-          visible: preview.pending.length > 0
+          id: controlsRow
           width: parent.width
           spacing: Style.space(8)
+          visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
 
           Text {
             text: "Cambios sin guardar"
+            visible: preview.pending.length > 0
             color: Color.accent
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
             font.bold: true
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
-            width: parent.width - saveButton.implicitWidth - discardButton.implicitWidth - parent.spacing * 2
+            width: visible ? (parent.width - saveButton.implicitWidth - discardButton.implicitWidth - centerButton.implicitWidth - parent.spacing * 3) : 0
           }
 
           Button {
             id: discardButton
             text: "DESCARTAR"
+            visible: preview.pending.length > 0
             fontSize: Style.font.caption
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1226,6 +1177,7 @@ Panel {
           Button {
             id: saveButton
             text: "GUARDAR"
+            visible: preview.pending.length > 0
             fontSize: Style.font.caption
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1237,6 +1189,19 @@ Panel {
               root.savePendingPositions(preview.pending)
               layoutView.resetDraft()
             }
+          }
+
+          Button {
+            id: centerButton
+            text: "⟳ CENTRAR"
+            visible: preview.layoutMonitors.length > 1
+            fontSize: Style.font.caption
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            horizontalPadding: Style.spacing.sm
+            verticalPadding: Style.spacing.controlPaddingY
+            bordered: true
+            onClicked: root.recenterLayout()
           }
         }
 
@@ -1335,8 +1300,15 @@ Panel {
       var s = Math.min((canvas.width - canvas.pad * 2) / bw, (canvas.implicitHeight - canvas.pad * 2) / bh)
       if (!isFinite(s) || s <= 0) return
       canvas.fitScale = s
-      canvas.offsetX = canvas.pad - minX * s
-      canvas.offsetY = canvas.pad - minY * s
+
+      // Center the layout content in the canvas both horizontally and
+      // vertically, regardless of the monitors' absolute coordinates.
+      var contentW = bw * s
+      var contentH = bh * s
+      var left = Math.max(minX, 0)
+      var top = Math.max(minY, 0)
+      canvas.offsetX = canvas.pad + (canvas.width - canvas.pad * 2 - contentW) / 2 - left * s
+      canvas.offsetY = canvas.pad + (canvas.implicitHeight - canvas.pad * 2 - contentH) / 2 - top * s
     }
 
     onDraftChanged: {
@@ -1345,19 +1317,16 @@ Panel {
     }
     onWidthChanged: computeFit()
 
+    // Single dark container: the layout background AND the parent the monitor
+    // rectangles are created into.
     Rectangle {
-      id: desktop
-      anchors.fill: parent
-      radius: Style.cornerRadius
-      color: Qt.darker(root.bar.foreground, 1.6)
-      opacity: 0.12
-    }
-
-    // Monitor rectangles are created dynamically so they can reference this
-    // canvas directly (Repeater delegates in an inline component cannot).
-    Item {
       id: layer
       anchors.fill: parent
+      radius: Style.cornerRadius
+      color: Qt.darker(root.bar.foreground, 1.8)
+      border.width: 1
+      border.color: Qt.darker(root.bar.foreground, 1.4)
+      clip: true
 
       function rebuild() {
         var toDestroy = []
@@ -1387,7 +1356,7 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Math.max(2, Style.space(2))
-        color: Style.selectedFillFor(root.bar.foreground, Color.accent)
+        color: Qt.rgba(0.12, 0.12, 0.14, 0.9)
         border.width: 1
         border.color: Qt.darker(root.bar.foreground, 1.4)
 
@@ -1424,6 +1393,7 @@ Panel {
     Text {
       visible: canvas.draggable
       anchors.bottom: parent.bottom
+      anchors.bottomMargin: Style.space(2)
       anchors.horizontalCenter: parent.horizontalCenter
       text: "Arrastra un monitor para reposicionarlo"
       color: Qt.darker(root.bar.foreground, 1.4)
