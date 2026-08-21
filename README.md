@@ -22,22 +22,17 @@ omarchy bar move aaronsr.monitor --section right
 # 3. Reload the shell so the widget appears
 omarchy restart shell
 
-# 4. Create a folder for your monitor profiles
-mkdir -p ~/.config/omarchy/monitor-profiles
+# 4. Nothing else — the profiles are generated automatically from the monitors
+#    you have connected (one per monitor, plus "All").
 ```
 
-That's it — the bar now shows the display widget. Open it by left-clicking the monitor icon.
+That's it — the bar now shows the display widget. Open it by left-clicking the monitor icon. The profile switcher lists one entry per connected monitor (e.g. `DP-1`, `DP-2`) plus `All`, Windows-style: pick "only this monitor" or "both".
 
-## Create your profiles
+## Profiles
 
-Profiles are plain JSON files in `~/.config/omarchy/monitor-profiles/`. Copy the bundled examples to start, then adapt them to your monitors:
+Profiles are plain JSON files in `~/.config/omarchy/monitor-profiles/`. They are **generated automatically** from the connected monitors, so you normally don't need to touch them. Existing per-monitor settings (position, scale, mode) are preserved when they regenerate.
 
-```bash
-# Copy the example profiles (adapt them to your hardware afterwards)
-cp ~/.config/omarchy/plugins/aaronsr.monitor/profiles/*.json ~/.config/omarchy/monitor-profiles/ 2>/dev/null
-```
-
-Or write one by hand. A profile named `All.json`:
+If you want to hand-tune one, the format is:
 
 ```json
 {
@@ -60,7 +55,7 @@ Find your monitor names and modes with `hyprctl monitors`.
 
 - **Brightness, text-size, and scale controls** — inherited from the `omarchy.monitor` panel.
 - **Per-monitor scale** — the scale slider (and `SUPER+/` / `SUPER+ALT+/`) changes the scale of the focused monitor only, and persists it in every profile plus `monitors.lua`.
-- **Horizontal profile switcher** — every profile as a pill; click to apply.
+- **Horizontal profile switcher** — one pill per connected monitor plus `All` (auto-generated, Windows-style); click to apply.
 - **Graphical layout preview** — the applied profile is drawn as an interactive canvas on a subtle grid. Each monitor is a rectangle at its relative logical size and position, labelled with its output, physical name, resolution, refresh rate and position. With several monitors active you can **drag them to reposition**:
   - **Magnet snapping** — on drop, the monitor glues to the nearest one along the side you released it (keeping your offset on the other axis, no forced centering) and never overlaps another.
   - **Explicit save** — dragging only updates the draft. Press **SAVE** to write the positions and apply, or **DISCARD** to revert.
