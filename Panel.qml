@@ -1460,7 +1460,7 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Style.cornerRadius
-        color: Color.muted
+        color: Style.selectedFillFor(root.bar.foreground, Color.accent)
         border.width: 1
         border.color: Color.menu.selectedBorder
 
