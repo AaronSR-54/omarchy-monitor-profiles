@@ -360,7 +360,7 @@ Panel {
   }
 
   // Logical layout of the active profile's enabled monitors for the
-  // repositioning canvas: { name, x, y, w, h } in unscaled logical px.
+  // repositioning canvas: { name, x, y, w, h, mode, position } in unscaled px.
   function previewLayout() {
     var out = []
     var mons = root.previewOutputs || []
@@ -373,7 +373,9 @@ Panel {
         x: m.x,
         y: m.y,
         w: (m.width || 0) / s,
-        h: (m.height || 0) / s
+        h: (m.height || 0) / s,
+        mode: m.mode || "",
+        position: m.position || ""
       })
     }
     return out
@@ -1228,7 +1230,7 @@ Panel {
       var out = []
       for (var i = 0; i < (mons || []).length; i++) {
         var m = mons[i]
-        out.push({ name: m.name, x: m.x, y: m.y, w: m.w, h: m.h })
+        out.push({ name: m.name, x: m.x, y: m.y, w: m.w, h: m.h, mode: m.mode || "", position: m.position || "" })
       }
       return out
     }
@@ -1251,6 +1253,7 @@ Panel {
       var updated = canvas.draft[idx]
       updated.x = absX
       updated.y = absY
+      updated.position = absX + "x" + absY
       var fresh = canvas.draft.slice()
       fresh[idx] = updated
       canvas.draft = fresh
@@ -1346,16 +1349,45 @@ Panel {
         border.width: 1
         border.color: Color.menu.selectedBorder
 
-        Text {
+        // "2560x1440 · 120Hz · 1979x-100"
+        readonly property string infoText: {
+          var parts = []
+          var dims = String(modelData ? modelData.mode : "").split("@")[0]
+          if (dims) parts.push(dims)
+          var m = String(modelData ? modelData.mode : "").split("@")[1] || ""
+          if (m) parts.push(parseInt(m, 10) + "Hz")
+          if (modelData && modelData.position) parts.push(modelData.position)
+          return parts.join(" · ")
+        }
+
+        Column {
           anchors.centerIn: parent
-          text: parent.monitorName
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: true
-          elide: Text.ElideMiddle
           width: parent.width - Style.space(4)
-          horizontalAlignment: Text.AlignHCenter
+          spacing: 1
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: parent.parent.monitorName
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            elide: Text.ElideMiddle
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+          }
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: parent.parent.infoText
+            visible: parent.parent.width >= Style.space(46)
+            color: Qt.darker(root.bar.foreground, 1.4)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideMiddle
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+          }
         }
 
         MouseArea {
