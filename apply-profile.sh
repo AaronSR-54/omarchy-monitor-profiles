@@ -1,6 +1,6 @@
 #!/bin/bash
 # Apply a monitor profile by rewriting the managed block in monitors.lua,
-# then reloading Hyprland. Native alternative to hyprmoncfg.
+# then reloading Hyprland.
 set -euo pipefail
 
 name="${1:?usage: apply-profile.sh <profile-name>}"

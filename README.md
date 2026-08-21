@@ -1,6 +1,6 @@
 # Display & profiles
 
-A bar widget for the Omarchy shell that adds a **native monitor profile switcher** to the display panel. Selecting a profile rewrites the managed block in `~/.config/hypr/monitors.lua`, enabling/disabling the chosen monitors, and reloads Hyprland. No hyprmoncfg.
+A bar widget for the Omarchy shell that adds a **monitor profile switcher** to the display panel. Selecting a profile rewrites the managed block in `~/.config/hypr/monitors.lua`, enabling/disabling the chosen monitors, and reloads Hyprland.
 
 ![Display & profiles](screenshots/preview.png)
 
