@@ -1111,7 +1111,7 @@ Panel {
     required property bool hasCursor
     signal hovered(bool isHovered)
 
-    readonly property bool mouseHover: previewHover.containsMouse
+    readonly property bool mouseHover: previewHover.hovered
     readonly property var layoutMonitors: root.previewLayout()
 
     implicitHeight: previewCard.implicitHeight
@@ -1204,12 +1204,11 @@ Panel {
       }
     }
 
-    MouseArea {
+    // HoverHandler (not a MouseArea) so the card can highlight on hover
+    // without swallowing mouse events meant for the repositioning canvas.
+    HoverHandler {
       id: previewHover
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onContainsMouseChanged: preview.hovered(containsMouse)
+      onHoveredChanged: preview.hovered(hovered)
     }
   }
 
