@@ -1136,6 +1136,19 @@ Panel {
         spacing: Style.space(8)
         visible: preview.pending.length > 0 || preview.layoutMonitors.length > 1
 
+        Button {
+          id: centerButton
+          text: "⟳ CENTRAR"
+          visible: preview.layoutMonitors.length > 1
+          fontSize: Style.font.caption
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          horizontalPadding: Style.spacing.sm
+          verticalPadding: Style.spacing.controlPaddingY
+          bordered: true
+          onClicked: root.recenterLayout()
+        }
+
         Text {
           text: "Cambios sin guardar"
           visible: preview.pending.length > 0
@@ -1176,19 +1189,6 @@ Panel {
             root.savePendingPositions(preview.pending)
             layoutView.resetDraft()
           }
-        }
-
-        Button {
-          id: centerButton
-          text: "⟳ CENTRAR"
-          visible: preview.layoutMonitors.length > 1
-          fontSize: Style.font.caption
-          foreground: root.bar.foreground
-          fontFamily: root.bar.fontFamily
-          horizontalPadding: Style.spacing.sm
-          verticalPadding: Style.spacing.controlPaddingY
-          bordered: true
-          onClicked: root.recenterLayout()
         }
       }
 
@@ -1309,9 +1309,9 @@ Panel {
       id: layer
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: Qt.rgba(0.06, 0.06, 0.08, 0.95)
+      color: Qt.rgba(0.12, 0.12, 0.15, 0.95)
       border.width: 1
-      border.color: Qt.darker(root.bar.foreground, 2.2)
+      border.color: Qt.darker(root.bar.foreground, 1.9)
       clip: true
 
       function rebuild() {
@@ -1342,9 +1342,9 @@ Panel {
         width: modelData ? Math.max(24, modelData.w * layout.fitScale) : 24
         height: modelData ? Math.max(14, modelData.h * layout.fitScale) : 14
         radius: Math.max(2, Style.space(2))
-        color: Qt.rgba(0.18, 0.18, 0.22, 1.0)
+        color: Qt.rgba(0.26, 0.26, 0.31, 1.0)
         border.width: 1
-        border.color: Qt.darker(root.bar.foreground, 1.7)
+        border.color: Qt.darker(root.bar.foreground, 1.5)
 
         Text {
           anchors.centerIn: parent
