@@ -41,7 +41,7 @@ This removes the widget from the bar and deletes the plugin code. It leaves `~/.
 
 ## Features
 
-- **Brightness, warmth, text-size, and scale controls** — inherited from the `omarchy.monitor` panel. The **warmth** slider maps 0–100% to a color temperature (6500K → 2700K) **per monitor**: it always warms the focused output via a generated Hyprland screen shader (one shader, branching on `wl_output`), and each monitor keeps its own value in `~/.config/omarchy/monitor-warmth.json`. Note: screen shaders are visible in screenshots/recordings (hyprsunset is not, but it only supports a global temperature).
+- **Brightness, warmth, text-size, and scale controls** — inherited from the `omarchy.monitor` panel. The **warmth** slider maps 0–100% to a hyprsunset color temperature (6500K → 2700K) so you can warm up the screen from the same panel.
 - **Per-monitor scale** — the scale slider (and `SUPER+/` / `SUPER+ALT+/`) changes the scale of the focused monitor only, and persists it in every profile plus `monitors.lua`.
 - **Horizontal profile switcher** — one pill per connected monitor plus `All` (generated automatically, Windows-style); click to apply.
 - **Graphical layout preview** — the applied profile is drawn as an interactive canvas on a subtle grid. Each monitor is a rectangle at its relative logical size and position, labelled with its output, physical name, resolution, refresh rate and position. With several monitors active you can **drag them to reposition**:

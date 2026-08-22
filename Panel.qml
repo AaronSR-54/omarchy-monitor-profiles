@@ -19,11 +19,9 @@ Panel {
   property bool brightnessSetQueued: false
   property bool brightnessAvailable: false
 
-  // Screen warmth, applied per monitor via a generated Hyprland screen
-  // shader (hyprsunset only supports a global temperature). warmthPercent is
-  // 0-100 where 0 = no warmth (6500K) and 100 = maximum warmth (2700K),
-  // always targeting the focused monitor. Follows the same debounce/queue
-  // dance as brightness.
+  // Screen warmth (hyprsunset color temperature). warmthPercent is 0-100
+  // where 0 = no warmth (6500K) and 100 = maximum warmth (2700K). Follows the
+  // same debounce/queue dance as brightness.
   property int warmthPercent: 0
   property int pendingWarmthPercent: 0
   property bool warmthSetQueued: false
@@ -256,7 +254,6 @@ Panel {
       brightness: root.brightnessPercent,
       brightnessAvailable: root.brightnessAvailable,
       warmth: root.warmthPercent,
-      warmthMonitor: root.focusedMonitor,
       warmthTemperature: root.warmthAvailable ? Model.temperatureForWarmth(root.warmthPercent) : null,
       warmthAvailable: root.warmthAvailable,
       focusedMonitor: root.focusedMonitor,
@@ -526,31 +523,19 @@ Panel {
     root.warmthPercent = percent
     root.pendingWarmthPercent = percent
 
-    if (!root.focusedMonitor) return
-
     if (setWarmthProc.running) {
       root.warmthSetQueued = true
       return
     }
 
     root.warmthSetQueued = false
-    setWarmthProc.command = ["bash", root.pluginDir + "/set-warmth.sh", root.focusedMonitor, String(percent)]
+    setWarmthProc.command = ["bash", root.pluginDir + "/set-warmth.sh", String(Model.temperatureForWarmth(percent))]
     setWarmthProc.running = true
   }
 
   function previewWarmth(value) {
     root.warmthPercent = Model.clampWarmth(value)
     warmthDebounce.restart()
-  }
-
-  // Profile switches rewrite monitors.lua and run `hyprctl reload`, which
-  // resets decoration:screen_shader back to the config (empty). Rebuild and
-  // reapply the warmth shader after any such reload so per-monitor warmth
-  // survives profile/scale/position changes.
-  function reapplyWarmth() {
-    if (applyWarmthProc.running) return
-    applyWarmthProc.command = ["bash", root.pluginDir + "/set-warmth.sh", "--apply"]
-    applyWarmthProc.running = true
   }
 
   function normalizeScale(scale) {
@@ -659,7 +644,6 @@ Panel {
 
   onBrightnessAvailableChanged: clampCursor()
   onWarmthAvailableChanged: clampCursor()
-  onFocusedMonitorChanged: if (root.opened && !warmthProc.running) warmthProc.running = true
   onDisplaysChanged: clampCursor()
   onProfilesChanged: clampCursor()
   onScaleValuesChanged: clampCursor()
@@ -701,21 +685,23 @@ Panel {
     }
   }
 
-  // Reads the per-monitor warmth state (output -> percent) and shows the
-  // focused monitor's value. The state file is written by set-warmth.sh; a
-  // missing file simply means "no warmth anywhere" (all monitors neutral).
+  // Reads the current hyprsunset color temperature (Kelvin) and maps it to a
+  // warmth percent. hyprsunset is started on demand by set-warmth.sh, so a
+  // failed read just hides the warmth section.
   Process {
     id: warmthProc
-    command: ["bash", "-c", "cat \"$0\" 2>/dev/null || echo '{}'", root.configHome() + "/omarchy/monitor-warmth.json"]
+    command: ["hyprctl", "hyprsunset", "temperature"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        var map = {}
-        try { map = JSON.parse(String(text || "{}")) } catch (e) {}
-        var value = Number(map[root.focusedMonitor] || 0)
-        root.warmthPercent = isFinite(value) ? Model.clampWarmth(value) : 0
-        root.warmthAvailable = root.focusedMonitor !== ""
+        var raw = String(text || "").trim()
+        var temp = parseInt(raw, 10)
+        root.warmthAvailable = isFinite(temp) && raw !== ""
+        root.warmthPercent = root.warmthAvailable ? Model.warmthForTemperature(temp) : 0
       }
+    }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) root.warmthAvailable = false
     }
   }
 
@@ -755,7 +741,7 @@ Panel {
     id: setWarmthProc
     stdout: StdioCollector { waitForEnd: true }
     // Same rationale as setBrightnessProc: the local warmthPercent is
-    // authoritative until the next read, so no refresh here.
+    // authoritative until the 5s poll re-reads hyprsunset, so no refresh here.
     onRunningChanged: {
       if (running) return
       if (root.warmthSetQueued) {
@@ -765,18 +751,11 @@ Panel {
   }
 
   Process {
-    id: applyWarmthProc
-    command: ["true"]
-    stdout: StdioCollector { waitForEnd: true }
-  }
-
-  Process {
     id: actionProc
     stdout: StdioCollector { waitForEnd: true }
     onRunningChanged: if (!running) {
       root.refresh()
       root.refreshProfiles()
-      root.reapplyWarmth()
     }
   }
 
@@ -795,7 +774,6 @@ Panel {
     onRunningChanged: function() {
       if (!running) {
         root.applying = false
-        root.reapplyWarmth()
         Qt.callLater(root.refresh)
       }
     }
@@ -825,10 +803,7 @@ Panel {
     command: ["true"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: {
-        root.refresh()
-        root.reapplyWarmth()
-      }
+      onStreamFinished: root.refresh()
     }
   }
 
@@ -839,7 +814,6 @@ Panel {
       waitForEnd: true
       onStreamFinished: function() {
         root.applying = false
-        root.reapplyWarmth()
         Qt.callLater(function() {
           root.refresh()
           root.refreshProfiles()
@@ -1088,14 +1062,10 @@ Panel {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
-              // Live temperature in Kelvin for the focused monitor, following
-              // the slider while dragging. Name the monitor it targets (like
-              // SCALE does) whenever more than one display is in play.
+              // Live temperature in Kelvin, following the slider while dragging.
               Text {
                 id: warmthTemp
-                text: (root.enabledDisplayCount > 1 && root.focusedMonitor
-                       ? root.focusedMonitor + " · " : "")
-                     + Model.temperatureForWarmth(warmthSlider.dragging
+                text: Model.temperatureForWarmth(warmthSlider.dragging
                        ? Math.round(warmthSlider.liveValue)
                        : root.warmthPercent) + "K"
                 color: Qt.darker(root.bar.foreground, 1.4)
