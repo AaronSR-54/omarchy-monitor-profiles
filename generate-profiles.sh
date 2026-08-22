@@ -34,6 +34,8 @@ printf '%s' "$settings" | jq '{name: "All", monitors: map({output, enabled: true
 
 # Write one profile per monitor (only that one enabled, the rest disabled).
 printf '%s' "$names" | while read -r name; do
+  # Only a safe basename may be used as a file name.
+  [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || continue
   printf '%s' "$settings" | jq --arg n "$name" '
     { name: $n, monitors: map({output, enabled: (.output == $n), mode, position, scale}) }
   ' > "$profiles_dir/$name.json"

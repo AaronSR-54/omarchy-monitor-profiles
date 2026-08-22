@@ -322,7 +322,7 @@ Panel {
   }
 
   function loadPreview() {
-    var name = root.activeProfile
+    var name = root.safeProfileName(root.activeProfile)
     root.previewOutputs = []
     if (!name) return
     previewProc.command = ["cat", root.profilesDir + "/" + name + ".json"]
@@ -391,6 +391,19 @@ Panel {
     return output
   }
 
+  // Only allow a safe basename (no path separators, no "..") before it is
+  // concatenated into a file path or passed to the helper scripts.
+  function safeProfileName(name) {
+    var s = String(name || "")
+    if (/^[A-Za-z0-9._-]+$/.test(s)) return s
+    return ""
+  }
+
+  // Neutralize any HTML before it reaches a Qt AutoText sink.
+  function escapeHtml(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  }
+
   // Logical layout of the active profile's enabled monitors for the
   // repositioning canvas: { name, x, y, w, h, mode, position } in unscaled px.
   function previewLayout() {
@@ -424,12 +437,15 @@ Panel {
   // and re-apply the active profile once. Does nothing if nothing moved.
   function savePendingPositions(pending) {
     if (!pending || pending.length === 0 || root.applying) return
+    var name = root.safeProfileName(root.activeProfile)
+    if (!name) return
     root.applying = true
-    saveProc.command = ["bash", root.pluginDir + "/apply-profile.sh", root.activeProfile, "--positions", JSON.stringify(pending)]
+    saveProc.command = ["bash", root.pluginDir + "/apply-profile.sh", name, "--positions", JSON.stringify(pending)]
     saveProc.running = true
   }
 
   function applyProfile(name) {
+    name = root.safeProfileName(name)
     if (!name || root.applying) return
     root.applying = true
     root.close()
@@ -1560,6 +1576,7 @@ Panel {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.displayText
+            textFormat: Text.PlainText
             color: Color.background
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
@@ -1572,6 +1589,7 @@ Panel {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.specText
+            textFormat: Text.PlainText
             visible: parent.parent.width >= Style.space(46)
             color: Color.background
             font.family: root.bar.fontFamily
@@ -1585,6 +1603,7 @@ Panel {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: parent.parent.positionText
+            textFormat: Text.PlainText
             visible: parent.parent.width >= Style.space(46) && parent.parent.positionText !== ""
             color: Color.background
             font.family: root.bar.fontFamily
@@ -1623,7 +1642,7 @@ Panel {
     required property var profile
     required property int profileIndex
 
-    text: profile.name
+    text: root.escapeHtml(profile.name)
     fontSize: Style.font.caption
     foreground: root.bar.foreground
     fontFamily: root.bar.fontFamily

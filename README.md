@@ -30,6 +30,15 @@ That's it — the bar now shows the display widget. Open it by left-clicking the
 
 You never have to create or edit anything by hand: the profiles are internal, generated automatically from the connected monitors, and your manual arrangement (positions, scales) is preserved when they regenerate.
 
+## Uninstall
+
+```bash
+omarchy plugin remove aaronsr.monitor --yes
+omarchy restart shell
+```
+
+This removes the widget from the bar and deletes the plugin code. It leaves `~/.config/hypr/monitors.lua` as-is except for the managed block the plugin owns, and leaves `~/.config/omarchy/monitor-profiles/` in place in case you want to keep your arrangements.
+
 ## Features
 
 - **Brightness, text-size, and scale controls** — inherited from the `omarchy.monitor` panel.
