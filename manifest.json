@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "aaronsr.monitor",
   "name": "Display & profiles",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Aaron Sanz Roca",
-  "description": "Display controls (brightness, scale, text size) plus a native monitor profile switcher. Selecting a profile rewrites ~/.config/hypr/monitors.lua, enabling/disabling the chosen monitors. Profiles live in ~/.config/omarchy/monitor-profiles/.",
+  "description": "Display controls (brightness, warmth, scale, text size) plus a native monitor profile switcher. Selecting a profile rewrites ~/.config/hypr/monitors.lua, enabling/disabling the chosen monitors. Profiles live in ~/.config/omarchy/monitor-profiles/.",
   "kinds": [
     "bar-widget"
   ],

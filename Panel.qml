@@ -18,6 +18,14 @@ Panel {
   property int pendingBrightnessPercent: 0
   property bool brightnessSetQueued: false
   property bool brightnessAvailable: false
+
+  // Screen warmth (hyprsunset color temperature). warmthPercent is 0-100
+  // where 0 = no warmth (6500K) and 100 = maximum warmth (2700K). Follows the
+  // same debounce/queue dance as brightness.
+  property int warmthPercent: 0
+  property int pendingWarmthPercent: 0
+  property bool warmthSetQueued: false
+  property bool warmthAvailable: false
   property string internalMonitor: ""
   property string externalMonitor: ""
   property string focusedMonitor: ""
@@ -94,6 +102,7 @@ Panel {
   readonly property var visibleSections: {
     var list = []
     if (brightnessAvailable) list.push("brightness")
+    if (warmthAvailable) list.push("warmth")
     list.push("textsize")
     list.push("scale")
     if ((profiles || []).length > 0) list.push("profiles")
@@ -103,6 +112,7 @@ Panel {
 
   function sectionCount(section) {
     if (section === "brightness") return 0  // only the slider sentinel at -1
+    if (section === "warmth") return 0      // only the slider sentinel at -1
     if (section === "textsize") return 0    // slider sentinel at -1, like brightness
     if (section === "scale") return (scaleValues || []).length
     if (section === "profiles") return (profiles || []).length
@@ -111,14 +121,14 @@ Panel {
   }
 
   function sectionIsSingleRow(section) {
-    // brightness and text size are lone sliders; scale and profiles are
-    // horizontal rows walked with h/l.
-    return section === "brightness" || section === "textsize" || section === "scale"
+    // brightness, warmth and text size are lone sliders; scale and profiles
+    // are horizontal rows walked with h/l.
+    return section === "brightness" || section === "warmth" || section === "textsize" || section === "scale"
         || section === "profiles" || section === "preview"
   }
 
   function sectionFirstIndex(section) {
-    if (section === "brightness" || section === "textsize") return -1
+    if (section === "brightness" || section === "warmth" || section === "textsize") return -1
     return 0
   }
 
@@ -170,6 +180,12 @@ Panel {
     setBrightness(root.brightnessPercent + delta)
   }
 
+  function adjustWarmth(delta) {
+    if (focusSection !== "warmth") return
+    if (!warmthAvailable) return
+    setWarmth(root.warmthPercent + delta)
+  }
+
   function activateCursor() {
     if (focusSection === "scale" && selectedIndex >= 0 && selectedIndex < scaleValues.length) {
       setScale(scaleValues[selectedIndex])
@@ -194,8 +210,8 @@ Panel {
     }
     var count = sectionCount(focusSection)
     if (sectionIsSingleRow(focusSection)) {
-      // brightness/text size use the -1 sentinel; scale clamps into the presets.
-      if (focusSection === "brightness" || focusSection === "textsize") selectedIndex = -1
+      // brightness/warmth/text size use the -1 sentinel; scale clamps into the presets.
+      if (focusSection === "brightness" || focusSection === "warmth" || focusSection === "textsize") selectedIndex = -1
       else if (selectedIndex < 0 || selectedIndex >= count) selectedIndex = 0
       return
     }
@@ -237,6 +253,9 @@ Panel {
     return JSON.stringify({
       brightness: root.brightnessPercent,
       brightnessAvailable: root.brightnessAvailable,
+      warmth: root.warmthPercent,
+      warmthTemperature: root.warmthAvailable ? Model.temperatureForWarmth(root.warmthPercent) : null,
+      warmthAvailable: root.warmthAvailable,
       focusedMonitor: root.focusedMonitor,
       scale: root.monitorScale,
       displays: root.displays
@@ -258,6 +277,7 @@ Panel {
 
   function refresh() {
     if (!stateProc.running) stateProc.running = true
+    if (!warmthProc.running) warmthProc.running = true
   }
 
   // Profiles and monitor descriptions only change when a profile is applied or
@@ -498,6 +518,26 @@ Panel {
     }))
   }
 
+  function setWarmth(value) {
+    var percent = Model.clampWarmth(value)
+    root.warmthPercent = percent
+    root.pendingWarmthPercent = percent
+
+    if (setWarmthProc.running) {
+      root.warmthSetQueued = true
+      return
+    }
+
+    root.warmthSetQueued = false
+    setWarmthProc.command = ["bash", root.pluginDir + "/set-warmth.sh", String(Model.temperatureForWarmth(percent))]
+    setWarmthProc.running = true
+  }
+
+  function previewWarmth(value) {
+    root.warmthPercent = Model.clampWarmth(value)
+    warmthDebounce.restart()
+  }
+
   function normalizeScale(scale) {
     return Model.normalizeScale(scale)
   }
@@ -603,6 +643,7 @@ Panel {
   }
 
   onBrightnessAvailableChanged: clampCursor()
+  onWarmthAvailableChanged: clampCursor()
   onDisplaysChanged: clampCursor()
   onProfilesChanged: clampCursor()
   onScaleValuesChanged: clampCursor()
@@ -644,11 +685,38 @@ Panel {
     }
   }
 
+  // Reads the current hyprsunset color temperature (Kelvin) and maps it to a
+  // warmth percent. hyprsunset is started on demand by set-warmth.sh, so a
+  // failed read just hides the warmth section.
+  Process {
+    id: warmthProc
+    command: ["hyprctl", "hyprsunset", "temperature"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var raw = String(text || "").trim()
+        var temp = parseInt(raw, 10)
+        root.warmthAvailable = isFinite(temp) && raw !== ""
+        root.warmthPercent = root.warmthAvailable ? Model.warmthForTemperature(temp) : 0
+      }
+    }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) root.warmthAvailable = false
+    }
+  }
+
   Timer {
     id: brightnessDebounce
     interval: 180
     repeat: false
     onTriggered: root.setBrightness(root.brightnessPercent)
+  }
+
+  Timer {
+    id: warmthDebounce
+    interval: 180
+    repeat: false
+    onTriggered: root.setWarmth(root.warmthPercent)
   }
 
   Process {
@@ -665,6 +733,19 @@ Panel {
       if (running) return
       if (root.brightnessSetQueued) {
         root.setBrightness(root.pendingBrightnessPercent)
+      }
+    }
+  }
+
+  Process {
+    id: setWarmthProc
+    stdout: StdioCollector { waitForEnd: true }
+    // Same rationale as setBrightnessProc: the local warmthPercent is
+    // authoritative until the 5s poll re-reads hyprsunset, so no refresh here.
+    onRunningChanged: {
+      if (running) return
+      if (root.warmthSetQueued) {
+        root.setWarmth(root.pendingWarmthPercent)
       }
     }
   }
@@ -805,6 +886,7 @@ Panel {
         if (dy !== 0) root.moveCursor(dy)
         else if (dx !== 0) {
           if (root.focusSection === "brightness") root.adjustBrightness(dx * 5)
+          else if (root.focusSection === "warmth") root.adjustWarmth(dx * 5)
           else if (root.focusSection === "textsize") root.adjustTextSize(dx)
           else if (root.focusSection === "scale" || root.focusSection === "profiles") root.moveCursorH(dx)
         }
@@ -950,6 +1032,83 @@ Panel {
                 onHoveredChanged: if (hovered && !root.reflowingText) {
                   root.cursorActive = true
                   root.focusSection = "brightness"
+                  root.selectedIndex = -1
+                }
+              }
+            }
+          }
+
+          // ---------- Warmth (screen color temperature) ----------
+          PanelSeparator {
+            visible: root.warmthAvailable
+            foreground: root.bar.foreground
+          }
+
+          Column {
+            visible: root.warmthAvailable
+            width: parent.width
+            spacing: Style.space(6)
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(warmthHeader.implicitHeight, warmthTemp.implicitHeight)
+
+              PanelSectionHeader {
+                id: warmthHeader
+                text: "WARMTH"
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              // Live temperature in Kelvin, following the slider while dragging.
+              Text {
+                id: warmthTemp
+                text: Model.temperatureForWarmth(warmthSlider.dragging
+                       ? Math.round(warmthSlider.liveValue)
+                       : root.warmthPercent) + "K"
+                color: Qt.darker(root.bar.foreground, 1.4)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(6)
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            CursorSurface {
+              id: warmthRow
+              width: parent.width
+              height: warmthSlider.implicitHeight + Style.spacing.controlGap
+              hasCursor: root.cursorActive && root.focusSection === "warmth" && root.selectedIndex === -1
+              onHasCursorChanged: if (hasCursor) root.ensureCursorVisible(warmthRow)
+              foreground: root.bar.foreground
+              outline: true
+
+              PanelSlider {
+                id: warmthSlider
+                bar: root.bar
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(6)
+                anchors.rightMargin: Style.space(6)
+                minimum: 0
+                maximum: 100
+                step: 1
+                value: root.warmthPercent
+                integer: true
+                onMoved: function(v) { root.previewWarmth(v) }
+                onReleased: function(v) {
+                  warmthDebounce.stop()
+                  root.setWarmth(v)
+                }
+              }
+
+              HoverHandler {
+                onHoveredChanged: if (hovered && !root.reflowingText) {
+                  root.cursorActive = true
+                  root.focusSection = "warmth"
                   root.selectedIndex = -1
                 }
               }
