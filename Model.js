@@ -4,10 +4,10 @@ function clampBrightness(value) {
   return Math.max(1, Math.min(100, Math.round(n)))
 }
 
-// Screen warmth, mapped to hyprsunset's color temperature in Kelvin.
-// 0% = no warmth (6500K, daylight identity point), 100% = maximum warmth.
-// These bounds are deliberately wider than omarchy's nightlight (4000K) so
-// the slider can go warmer than the simple on/off toggle.
+// Screen warmth, mapped to a color temperature in Kelvin. 0% = no warmth
+// (6500K, daylight identity point), 100% = maximum warmth. These bounds are
+// deliberately wider than omarchy's nightlight (4000K) so the slider can go
+// warmer than the simple on/off toggle.
 var WARMTH_COOL_TEMP = 6500
 var WARMTH_WARM_TEMP = 2700
 
@@ -21,15 +21,6 @@ function clampWarmth(value) {
 function temperatureForWarmth(percent) {
   var p = clampWarmth(percent)
   return Math.round(WARMTH_COOL_TEMP - (p / 100) * (WARMTH_COOL_TEMP - WARMTH_WARM_TEMP))
-}
-
-// Color temperature in Kelvin -> warmth percent (0-100). Out-of-range
-// temperatures are clamped into the slider's span.
-function warmthForTemperature(temp) {
-  var t = Number(temp)
-  if (!isFinite(t)) return 0
-  t = Math.max(WARMTH_WARM_TEMP, Math.min(WARMTH_COOL_TEMP, t))
-  return Math.round(((WARMTH_COOL_TEMP - t) / (WARMTH_COOL_TEMP - WARMTH_WARM_TEMP)) * 100)
 }
 
 function normalizeScale(scale) {
@@ -146,7 +137,6 @@ if (typeof module !== "undefined") {
     WARMTH_WARM_TEMP: WARMTH_WARM_TEMP,
     clampWarmth: clampWarmth,
     temperatureForWarmth: temperatureForWarmth,
-    warmthForTemperature: warmthForTemperature,
     normalizeScale: normalizeScale,
     cleanScale: cleanScale,
     matchingScaleIndex: matchingScaleIndex,
