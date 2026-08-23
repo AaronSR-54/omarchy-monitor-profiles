@@ -81,6 +81,12 @@ fi
 # Fallback (no matching profile): rewrite the monitor's scale in the managed
 # block directly. Saving the file makes Hyprland reload it automatically.
 if grep -q "output = \"$monitor\"" "$monitor_lua"; then
+  # sed -i writes through a symlink, so refuse to follow one: it could
+  # truncate whatever the link points at.
+  if [[ -L "$monitor_lua" ]]; then
+    echo "refusing symlink: $monitor_lua" >&2
+    exit 1
+  fi
   sed -i -E \
     "s|(hl\\.monitor\\(\\{ output = \"$monitor\".*scale = )[^,}]+( \}\\))|\\1$scale\\2|" \
     "$monitor_lua"

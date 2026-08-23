@@ -102,7 +102,7 @@ Panel {
   readonly property var visibleSections: {
     var list = []
     if (brightnessAvailable) list.push("brightness")
-    if (warmthAvailable) list.push("warmth")
+    list.push("warmth")
     list.push("textsize")
     list.push("scale")
     if ((profiles || []).length > 0) list.push("profiles")
@@ -182,7 +182,6 @@ Panel {
 
   function adjustWarmth(delta) {
     if (focusSection !== "warmth") return
-    if (!warmthAvailable) return
     setWarmth(root.warmthPercent + delta)
   }
 
@@ -686,8 +685,8 @@ Panel {
   }
 
   // Reads the current hyprsunset color temperature (Kelvin) and maps it to a
-  // warmth percent. hyprsunset is started on demand by set-warmth.sh, so a
-  // failed read just hides the warmth section.
+  // warmth percent. hyprsunset is started on demand by set-warmth.sh; a failed
+  // read just leaves the slider at 0 (6500K) rather than hiding the section.
   Process {
     id: warmthProc
     command: ["hyprctl", "hyprsunset", "temperature"]
@@ -1040,12 +1039,10 @@ Panel {
 
           // ---------- Warmth (screen color temperature) ----------
           PanelSeparator {
-            visible: root.warmthAvailable
             foreground: root.bar.foreground
           }
 
           Column {
-            visible: root.warmthAvailable
             width: parent.width
             spacing: Style.space(6)
 

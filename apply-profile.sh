@@ -10,6 +10,10 @@ profile_file="$profiles_dir/$name.json"
 monitor_lua="$config_dir/hypr/monitors.lua"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 
+# The profile read and generated block must stay bounded; otherwise an
+# oversized profile could exhaust the shell while it is buffered.
+max_profile_bytes=$((512*1024))
+
 # Only a safe basename may be used in a file path.
 if [[ ! $name =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "invalid profile name: $name" >&2
@@ -22,8 +26,23 @@ if [[ ${2:-} == "--positions" ]]; then
   positions="${3:-}"
 fi
 
-if [[ ! -f $profile_file ]]; then
+# Refuse to rewrite monitors.lua through a symlink or non-regular file: shell
+# redirection would follow the link and truncate whatever it points at.
+if [[ -L "$monitor_lua" ]]; then
+  echo "refusing symlink: $monitor_lua" >&2
+  exit 1
+fi
+if [[ ! -e "$monitor_lua" || ! -f "$monitor_lua" ]]; then
+  echo "refusing non-regular file: $monitor_lua" >&2
+  exit 1
+fi
+
+if [[ ! -f $profile_file || -L $profile_file ]]; then
   echo "profile not found: $name" >&2
+  exit 1
+fi
+if (( $(wc -c < "$profile_file") > max_profile_bytes )); then
+  echo "profile too large: $name" >&2
   exit 1
 fi
 
@@ -63,9 +82,15 @@ block=$(jq -r '
   | join("\n")
 ' "$profile_file")
 
-cp "$monitor_lua" "$monitor_lua.bak.$(date +%s)"
+backup="$monitor_lua.bak.$(date +%s)"
+if [[ -L "$backup" ]]; then
+  echo "refusing symlink: $backup" >&2
+  exit 1
+fi
+cp "$monitor_lua" "$backup"
 
-tmp=$(mktemp)
+mode=$(stat -c %a "$monitor_lua")
+tmp=$(mktemp "$(dirname "$monitor_lua")/.monitors.XXXXXX")
 
 # Strip any existing managed region so it can be rewritten below.
 awk -v start="$start_marker" -v end="$end_marker" '
@@ -74,12 +99,18 @@ awk -v start="$start_marker" -v end="$end_marker" '
   !inside { print }
 ' "$monitor_lua" > "$tmp"
 
+final=$(mktemp "$(dirname "$monitor_lua")/.monitors.XXXXXX")
 {
   cat "$tmp"
   echo
   echo "$block"
-} > "$monitor_lua"
-
+} > "$final"
 rm -f "$tmp"
+
+# Atomic rename in the same directory: the fixed monitors.lua path is never
+# truncated in place, so a symlink swapped in mid-write can't redirect the
+# write onto another user's file.
+chmod "$mode" "$final"
+mv -f "$final" "$monitor_lua"
 
 hyprctl reload
