@@ -14,9 +14,21 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 # oversized profile could exhaust the shell while it is buffered.
 max_profile_bytes=$((512*1024))
 
-# Only a safe basename may be used in a file path.
-if [[ ! $name =~ ^[A-Za-z0-9._-]+$ ]]; then
+# Only a safe basename may be used in a file path. The charset already
+# excludes "/", but reject the reserved dot components "." and ".."
+# explicitly: they are never valid profile names and are reserved path
+# elements that could aim a constructed path at the parent directory.
+if [[ ! $name =~ ^[A-Za-z0-9._-]+$ || $name == "." || $name == ".." ]]; then
   echo "invalid profile name: $name" >&2
+  exit 1
+fi
+
+# Defense in depth: guarantee the resolved profile path stays inside the
+# profiles directory. Covers any future path-construction mistake and any
+# name that sneaks past the charset check above.
+profile_canon="$(cd "$(dirname "$profile_file")" 2>/dev/null && pwd)/$(basename "$profile_file")"
+if [[ "$profile_canon" != "$profiles_dir"/* ]]; then
+  echo "profile path escapes profiles dir: $name" >&2
   exit 1
 fi
 

@@ -8,23 +8,34 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 "$script_dir/generate-profiles.sh" || exit 1
 
 # Bounds for the concatenated JSON. The profiles dir is user-writable, so cap
-# both the number of files and the bytes emitted; the panel buffers the whole
-# array, so an oversized or flooded directory must not be able to exhaust it.
+# the number of files, the bytes emitted, and the monitor entries inside each
+# profile and in aggregate; the panel buffers the whole array, so an oversized
+# or flooded directory (or a profile stuffed with thousands of monitors) must
+# not be able to exhaust it before the data reaches the shell collection.
 max_files=64
 max_file_bytes=$((64*1024))
 max_total_bytes=$((512*1024))
+max_monitors_per_profile=16
+max_total_monitors=256
 
 files=()
 all_file=""
 total_bytes=0
+total_monitors=0
 shopt -s nullglob
 for f in "$profiles_dir"/*.json; do
   [[ -f $f && ! -L $f ]] || continue
   sz=$(wc -c < "$f")
   (( sz <= max_file_bytes )) || continue
   (( total_bytes + sz <= max_total_bytes )) || break
+  # Bound the monitors inside each profile: a single small file could still
+  # embed an unbounded array that the panel collects wholesale.
+  mcount=$(jq -r '([.monitors[]?] | length)' "$f" 2>/dev/null || echo 0)
+  (( mcount <= max_monitors_per_profile )) || continue
+  (( total_monitors + mcount <= max_total_monitors )) || break
   files+=("$f")
   total_bytes=$((total_bytes + sz))
+  total_monitors=$((total_monitors + mcount))
   [[ $f == "$profiles_dir/All.json" ]] && all_file="$f"
   (( ${#files[@]} < max_files )) || break
 done

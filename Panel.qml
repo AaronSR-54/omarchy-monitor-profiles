@@ -414,6 +414,10 @@ Panel {
   // concatenated into a file path or passed to the helper scripts.
   function safeProfileName(name) {
     var s = String(name || "")
+    // Reject the reserved dot components explicitly. The charset already
+    // excludes "/", but "." and ".." are reserved path elements that must
+    // never be concatenated into a file path or handed to the scripts.
+    if (s === "." || s === "..") return ""
     if (/^[A-Za-z0-9._-]+$/.test(s)) return s
     return ""
   }

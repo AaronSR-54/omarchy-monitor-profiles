@@ -28,6 +28,15 @@ if [[ -z $active ]]; then
   exit 1
 fi
 
+# The active name is read back from an untrusted profile file, so guard it
+# the same way apply-profile.sh guards its argument: reject the reserved dot
+# components and anything outside the safe basename charset before it is used
+# in a path or forwarded to apply-profile.sh.
+if [[ ! $active =~ ^[A-Za-z0-9._-]+$ || $active == "." || $active == ".." ]]; then
+  echo "invalid active profile name: $active" >&2
+  exit 1
+fi
+
 profile_file="$profiles_dir/$active.json"
 
 tmp=$(mktemp)
