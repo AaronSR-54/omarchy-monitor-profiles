@@ -12,7 +12,12 @@ config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
 profiles_dir="$config_dir/omarchy/monitor-profiles"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 
-enabled=$(hyprctl monitors all -j | jq -r '[.[] | select(.disabled != true) | .name] | sort | join(",")')
+# Virtual outputs (HEADLESS-N) get no profile, so they must not take part in
+# the active-profile match; otherwise a headless output being on would hide the
+# real profile and dragging would fail with "no active profile matches".
+enabled=$(hyprctl monitors all -j | jq -r '
+  [.[] | select(.disabled != true) | (.name // "") | select(test("^HEADLESS-[0-9]+$") | not)] | sort | join(",")
+')
 active=""
 for f in "$profiles_dir"/*.json; do
   [[ -f $f ]] || continue
@@ -39,9 +44,14 @@ fi
 
 profile_file="$profiles_dir/$active.json"
 
+# Physical identity of the monitor. Positions are matched by identity so they
+# follow the panel when its output name changes; the output name is the
+# fallback for profiles generated before identities existed.
+identity=$(hyprctl monitors all -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | ((.description // "") | tostring)' | head -1)
+
 tmp=$(mktemp)
-jq --arg m "$monitor" --arg p "${x}x${y}" '
-  (.monitors[] | select(.output == $m)) .position = $p
+jq --arg m "$monitor" --arg id "$identity" --arg p "${x}x${y}" '
+  (.monitors[] | select(.output == $m or ($id != "" and .identity == $id))) .position = $p
 ' "$profile_file" > "$tmp" && mv "$tmp" "$profile_file"
 rm -f "$tmp"
 

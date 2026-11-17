@@ -8,6 +8,12 @@ set -euo pipefail
 file="${1:?usage: center-layout.sh <profile.json>}"
 [[ -f $file ]] || exit 0
 
+# An enabled monitor without a concrete mode/position can't be measured; leave
+# the layout as-is rather than erroring out (apply-profile fills safe defaults).
+if jq -e 'any(.monitors[]; .enabled and (.mode == null or .position == null))' "$file" >/dev/null 2>&1; then
+  exit 0
+fi
+
 tmp=$(mktemp)
 jq '
   def compute:

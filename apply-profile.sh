@@ -86,7 +86,7 @@ block=$(jq -r '
    "-- Profile \"" + (.name | lua_escape) + "\" applied"] +
   ([.monitors[] |
     if .enabled then
-      "hl.monitor({ output = \"" + (.output | lua_escape) + "\", mode = \"" + (.mode | lua_escape) + "\", position = \"" + (.position | lua_escape) + "\", scale = " + (.scale | safe_scale) + " })"
+      "hl.monitor({ output = \"" + (.output | lua_escape) + "\", mode = \"" + ((.mode // "preferred") | lua_escape) + "\", position = \"" + ((.position // "auto") | lua_escape) + "\", scale = " + (.scale | safe_scale) + " })"
     else
       "hl.monitor({ output = \"" + (.output | lua_escape) + "\", disabled = true })"
     end]) +

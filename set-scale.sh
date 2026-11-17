@@ -12,6 +12,13 @@ set -euo pipefail
 config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
 profiles_dir="$config_dir/omarchy/monitor-profiles"
 monitor_lua="$config_dir/hypr/monitors.lua"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+# Regenerate the profiles first so they describe the monitors that are
+# connected right now (output names can change across reboots). Saved settings
+# are preserved by physical identity, so this does not lose custom scales.
+# A failure here is not fatal: the existing profiles are used as a fallback.
+"$script_dir/generate-profiles.sh" || true
 
 presets=(1 1.25 1.6 2 3 4)
 
@@ -33,6 +40,11 @@ fi
 current=$(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | .scale' | head -1)
 [[ -n $current ]] || { echo "monitor not found: $monitor" >&2; exit 1; }
 
+# Physical identity (make/model/serial) of the monitor. Profiles are matched by
+# identity so a saved scale follows the panel even when its output name changes
+# after a reboot or recabling; the output name remains the fallback.
+identity=$(hyprctl monitors -j | jq -r --arg m "$monitor" '.[] | select(.name == $m) | ((.description // "") | tostring)' | head -1)
+
 scale=$(awk -v value="$arg" -v cur="$current" -v list="${presets[*]}" '
   function abs(x) { return x < 0 ? -x : x }
   BEGIN {
@@ -49,12 +61,11 @@ scale=$(awk -v value="$arg" -v cur="$current" -v list="${presets[*]}" '
 # 1. Persist the scale for this monitor in every profile and re-center the
 #    layout positions so the monitors stay centered (a monitor's scale belongs
 #    to the monitor, not the layout).
-script_dir="$(cd "$(dirname "$0")" && pwd)"
 tmp=$(mktemp)
 for f in "$profiles_dir"/*.json; do
   [[ -f $f ]] || continue
-  jq --arg m "$monitor" --arg s "$scale" '
-    (.monitors[] | select(.output == $m)) .scale = ($s | tonumber)
+  jq --arg m "$monitor" --arg id "$identity" --arg s "$scale" '
+    (.monitors[] | select(.output == $m or ($id != "" and .identity == $id))) .scale = ($s | tonumber)
   ' "$f" > "$tmp" && mv "$tmp" "$f"
   "$script_dir/center-layout.sh" "$f"
 done
@@ -63,7 +74,12 @@ rm -f "$tmp"
 # 2. Re-apply the active profile (the one matching the currently enabled
 #    monitors) so the managed block in monitors.lua reflects the new scale and
 #    centered positions.
-enabled=$(hyprctl monitors all -j | jq -r '[.[] | select(.disabled != true) | .name] | sort | join(",")')
+# Virtual outputs (HEADLESS-N) get no profile, so they must not take part in
+# the active-profile match; otherwise a headless output being on would hide the
+# real profile and the re-apply below would be skipped.
+enabled=$(hyprctl monitors all -j | jq -r '
+  [.[] | select(.disabled != true) | (.name // "") | select(test("^HEADLESS-[0-9]+$") | not)] | sort | join(",")
+')
 active=""
 for f in "$profiles_dir"/*.json; do
   [[ -f $f ]] || continue

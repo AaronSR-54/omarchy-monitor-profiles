@@ -310,7 +310,7 @@ Panel {
     var enabled = []
     for (var i = 0; i < root.displays.length; i++) {
       var d = root.displays[i]
-      if (d && d.enabled) enabled.push(d.name)
+      if (d && d.enabled && !root.isVirtualOutput(d.name)) enabled.push(d.name)
     }
     enabled.sort()
     var key = enabled.join(",")
@@ -394,11 +394,13 @@ Panel {
       for (var i = 0; i < (arr || []).length; i++) {
         var m = arr[i]
         if (!m || !m.name) continue
-        // Short name: make + model, no serial.
-        var parts = []
-        if (m.make) parts.push(m.make)
-        if (m.model) parts.push(m.model)
-        map[m.name] = parts.join(" ")
+        // Short, human name: the model usually already carries the brand
+        // ("BenQ EX2710Q"); otherwise prefix the make ("AOC 24G1WG4").
+        var make = String(m.make || "").trim()
+        var model = String(m.model || "").trim()
+        var label = model.indexOf(" ") >= 0 ? model : (make + " " + model).trim()
+        if (!label) label = String(m.description || m.name)
+        map[m.name] = label
       }
     } catch (e) {}
     root.monitorDescriptions = map
@@ -408,6 +410,42 @@ Panel {
     var desc = root.monitorDescriptions[output]
     if (desc && desc !== output) return output + " (" + desc + ")"
     return output
+  }
+
+  // The monitor entry a profile targets: the single enabled one.
+  function profileMonitor(profile) {
+    var monitors = (profile && profile.monitors) || []
+    for (var i = 0; i < monitors.length; i++) {
+      var m = monitors[i]
+      if (m && m.enabled) return m
+    }
+    return null
+  }
+
+  // Pill label: brand + model of the monitor the profile targets. The output
+  // name is deliberately left out; it stays in the tooltip.
+  function profileLabel(profile) {
+    if (!profile) return ""
+    if (profile.name === "All") return "All"
+    var m = root.profileMonitor(profile)
+    if (!m) return String(profile.name || "")
+    var desc = root.monitorDescriptions[m.output]
+    return (desc && desc !== m.output) ? desc : String(profile.name || "")
+  }
+
+  function profileTooltip(profile) {
+    if (!profile) return ""
+    if (profile.name === "All") return "All connected monitors"
+    var m = root.profileMonitor(profile)
+    if (!m) return String(profile.name || "")
+    return m.output + " · " + (root.monitorDescriptions[m.output] || m.identity || m.output)
+  }
+
+  // Hyprland's virtual outputs (`hyprctl output create headless`) are named
+  // HEADLESS-N and get no profile, so they are also left out of the active
+  // profile match: an enabled headless output must not hide the real profile.
+  function isVirtualOutput(name) {
+    return /^HEADLESS-[0-9]+$/.test(String(name || ""))
   }
 
   // Only allow a safe basename (no path separators, no "..") before it is
@@ -651,6 +689,12 @@ Panel {
   onProfilesChanged: clampCursor()
   onScaleValuesChanged: clampCursor()
   onVisibleSectionsChanged: clampCursor()
+
+  // Monitors hot-plugged while the shell is running: regenerate the profile
+  // list as soon as the screen count changes, so the switcher picks up new
+  // outputs without waiting for the panel to be reopened.
+  property int connectedScreenCount: Quickshell.screens.length
+  onConnectedScreenCountChanged: refreshProfiles()
 
   // Only poll while the panel is open; the bar glyph tracks monitor count via
   // Quickshell.screens, and open-time refresh + Component.onCompleted cover the
@@ -1802,7 +1846,8 @@ Panel {
     required property var profile
     required property int profileIndex
 
-    text: root.escapeHtml(profile.name)
+    text: root.escapeHtml(root.profileLabel(profile))
+    tooltipText: root.profileTooltip(profile)
     fontSize: Style.font.caption
     foreground: root.bar.foreground
     fontFamily: root.bar.fontFamily
